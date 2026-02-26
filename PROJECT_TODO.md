@@ -38,6 +38,7 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Verify app against public HTTPS API from a physical Android device.
 - [x] Configure Google Sign-In Android client (SHA-1/SHA-256 + package name) in Google Cloud console.
 - [x] Include release `google-services.json` in Android build pipeline.
+- [ ] Rename package from `com.example` to `com.healthcoach.personal_health_coach` for production branding.
 
 ## 5) Security and Compliance Baseline
 
@@ -73,6 +74,17 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 
 ---
 
+## 9) iOS Support and Apple Compatibility
+
+- [ ] Install Xcode from Mac App Store.
+- [ ] Run `cd mobile && flutter build ios --no-codesign` to verify base build.
+- [ ] Configure `Info.plist` for camera/photo permissions (if needed for reports).
+- [ ] Configure `Runner` Bundle ID and signing in Xcode project.
+- [ ] Verify app on iOS Simulator.
+- [ ] Verify app on physical iPhone/iPad.
+
+---
+
 ## Work Completed in This Iteration
 
 - [x] Implemented runtime API Base URL support in mobile app.
@@ -80,3 +92,4 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Fixed mobile tests and verified Flutter tests pass.
 - [x] Built release APK successfully:
   - `mobile/build/app/outputs/flutter-apk/app-release.apk`
+- [x] Automated GCP Backend deployment on Ubuntu 22.04 LTS.

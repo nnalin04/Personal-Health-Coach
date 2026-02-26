@@ -61,7 +61,9 @@ class AuthController extends StateNotifier<AuthState> {
   final ApiClient apiClient;
   final TokenStorage tokenStorage;
   final AppConfigStorage appConfigStorage;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '861056278474-7ir6orsre5203fbfkppff83lholn60a4.apps.googleusercontent.com',
+  );
 
   AuthController({
     required this.apiClient,

@@ -6,6 +6,7 @@
 .env.dev
 .env.uat
 .env.prod
+.keytool
 
 # Java
 backend/target/
@@ -29,3 +30,8 @@ mobile/pubspec.lock
 # IDE
 .vscode/
 .idea/
+
+# Android Signing
+mobile/android/key.properties
+mobile/android/app/keystores/
+mobile/android/app/google-services.json

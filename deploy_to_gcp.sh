@@ -30,6 +30,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ENV_FILE=".env.${ENVIRONMENT}"
+if [[ ! -f "$ENV_FILE" ]]; then
+  ENV_FILE="env.${ENVIRONMENT}"
+fi
 ENV_TMPL=".env.${ENVIRONMENT}.tmpl"
 COMPOSE_FILE="docker-compose.${ENVIRONMENT}.yml"
 APP_DIR="/opt/health-coach"
@@ -77,13 +80,41 @@ if grep -Eq '=(your_|generate_)' "$ENV_FILE"; then
 fi
 
 echo "Deploying environment=$ENVIRONMENT to project=$PROJECT_ID zone=$ZONE instance=$INSTANCE_NAME"
-gcloud config set project "$PROJECT_ID" >/dev/null
+
+# Determine region from zone (e.g., us-central1-a -> us-central1)
+REGION="${ZONE%-*}"
+IP_NAME="${INSTANCE_NAME}-ip"
+
+echo "Ensuring static IP exists..."
+if ! gcloud compute addresses describe "$IP_NAME" --project "$PROJECT_ID" --region="$REGION" >/dev/null 2>&1; then
+  echo "Creating static IP: $IP_NAME"
+  gcloud compute addresses create "$IP_NAME" --project "$PROJECT_ID" --region="$REGION" >/dev/null
+fi
+STATIC_IP=$(gcloud compute addresses describe "$IP_NAME" --project "$PROJECT_ID" --region="$REGION" --format='get(address)')
+echo "Using Static IP: $STATIC_IP"
+
+echo "Checking for service account..."
+# Attempt to find the default compute service account or any available one
+SA_EMAIL=$(gcloud iam service-accounts list --project "$PROJECT_ID" --filter="email ~ compute@developer.gserviceaccount.com" --format='get(email)' --limit=1 2>/dev/null || true)
+if [[ -z "$SA_EMAIL" ]]; then
+  SA_EMAIL=$(gcloud iam service-accounts list --project "$PROJECT_ID" --format='get(email)' --limit=1 2>/dev/null || true)
+fi
+
+SA_FLAG=""
+if [[ -n "$SA_EMAIL" ]]; then
+  echo "Using service account: $SA_EMAIL"
+  SA_FLAG="--service-account=$SA_EMAIL"
+else
+  echo "WARNING: No service account found. This may cause issues with instance metadata access."
+  SA_FLAG="--no-service-account"
+fi
 
 echo "Enabling required APIs..."
-gcloud services enable compute.googleapis.com >/dev/null
+gcloud services enable compute.googleapis.com --project "$PROJECT_ID" >/dev/null
 
 echo "Ensuring firewall rule exists..."
 gcloud compute firewall-rules create "$FIREWALL_RULE" \
+  --project "$PROJECT_ID" \
   --direction=INGRESS \
   --priority=1000 \
   --network=default \
@@ -92,64 +123,70 @@ gcloud compute firewall-rules create "$FIREWALL_RULE" \
   --source-ranges=0.0.0.0/0 \
   --target-tags="$INSTANCE_NAME" >/dev/null 2>&1 || true
 
-if gcloud compute instances describe "$INSTANCE_NAME" --zone="$ZONE" >/dev/null 2>&1; then
+if gcloud compute instances describe "$INSTANCE_NAME" --project "$PROJECT_ID" --zone="$ZONE" >/dev/null 2>&1; then
   echo "Instance already exists: $INSTANCE_NAME"
 else
-  echo "Creating instance: $INSTANCE_NAME"
+  echo "Creating instance (Ubuntu 22.04 LTS): $INSTANCE_NAME"
   gcloud compute instances create "$INSTANCE_NAME" \
     --project="$PROJECT_ID" \
     --zone="$ZONE" \
     --machine-type="$MACHINE_TYPE" \
-    --image-family="cos-stable" \
-    --image-project="cos-cloud" \
+    --image-family="ubuntu-2204-lts" \
+    --image-project="ubuntu-os-cloud" \
     --tags="$INSTANCE_NAME" \
-    --scopes=https://www.googleapis.com/auth/cloud-platform \
-    --metadata=startup-script='#!/bin/bash
-set -eux
-mkdir -p /opt/health-coach
-mkdir -p /root/.docker/cli-plugins || true
-if ! docker compose version >/dev/null 2>&1; then
-  COMPOSE_VERSION="v2.29.7"
-  COMPOSE_BIN="/root/.docker/cli-plugins/docker-compose"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" -o "${COMPOSE_BIN}"
-  else
-    wget -q "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" -O "${COMPOSE_BIN}"
-  fi
-  chmod +x "${COMPOSE_BIN}"
-fi
-'
+    --address="$STATIC_IP" \
+    $SA_FLAG \
+    --scopes=https://www.googleapis.com/auth/cloud-platform
 fi
 
 echo "Waiting for SSH..."
 sleep 20
 
 echo "Packaging source..."
-tar czf "$TARBALL" \
+# Use --no-xattrs and COPYFILE_DISABLE to avoid Mac metadata warnings
+TAR_OPTS="czf"
+export COPYFILE_DISABLE=1
+if tar --version | grep -q "gnu"; then
+  TAR_OPTS="--no-xattrs -czf"
+fi
+
+tar $TAR_OPTS "$TARBALL" \
   --exclude='.git' \
   --exclude='backend/target' \
   --exclude='ai-service/.venv' \
   --exclude='ai-service/__pycache__' \
   --exclude='ai-service/app/**/__pycache__' \
   --exclude='mobile' \
+  --exclude='._*' \
   "$COMPOSE_FILE" "$ENV_FILE" backend ai-service
 
 echo "Uploading package..."
-gcloud compute scp --zone="$ZONE" "$TARBALL" "$INSTANCE_NAME:~/health-coach.tar.gz"
+gcloud compute scp --project "$PROJECT_ID" --zone="$ZONE" "$TARBALL" "$INSTANCE_NAME:~/health-coach.tar.gz"
 
 echo "Deploying on VM..."
-gcloud compute ssh --zone="$ZONE" "$INSTANCE_NAME" --command="
+gcloud compute ssh --project "$PROJECT_ID" --zone="$ZONE" "$INSTANCE_NAME" --command="
 set -euo pipefail
 sudo mkdir -p $APP_DIR
+
+# Install Docker and Compose if missing (Ubuntu specific)
+if ! command -v docker-compose >/dev/null 2>&1; then
+  echo 'Installing Docker and Docker Compose...'
+  sudo apt-get update
+  sudo apt-get install -y docker.io docker-compose
+  sudo systemctl enable --now docker
+fi
+
 sudo tar xzf ~/health-coach.tar.gz -C $APP_DIR
 cd $APP_DIR
 sudo mv '$ENV_FILE' .env
 sudo mv '$COMPOSE_FILE' docker-compose.yml
-sudo docker compose down --remove-orphans || true
-sudo docker compose up -d --build
+
+# Use standard docker-compose
+sudo docker-compose down --remove-orphans || true
+sudo docker-compose up -d --build
 "
 
-PUBLIC_IP="$(gcloud compute instances describe "$INSTANCE_NAME" --zone="$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
+PUBLIC_IP="$(gcloud compute instances describe "$INSTANCE_NAME" --project "$PROJECT_ID" --zone="$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
 echo "Deployment complete for $ENVIRONMENT"
 echo "Backend URL: http://${PUBLIC_IP}:8080"
 echo "Health check: http://${PUBLIC_IP}:8080/actuator/health"

@@ -116,27 +116,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Connection',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _apiBaseUrl,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      labelText: 'API Base URL',
-                      hintText: 'https://api.example.com/api',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(height: 8),
           Card(
             child: ListTile(
