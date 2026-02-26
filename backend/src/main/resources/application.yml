@@ -1,0 +1,47 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/health_coach}
+    username: ${SPRING_DATASOURCE_USERNAME:health_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:health_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:replace_with_a_very_long_secret_key}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+  upload-dir: ${UPLOAD_DIR:uploads}
+
+google:
+  client:
+    id: ${GOOGLE_CLIENT_ID:your-google-client-id.apps.googleusercontent.com}
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN

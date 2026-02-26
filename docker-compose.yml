@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: health-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-health_coach}
+      POSTGRES_USER: ${POSTGRES_USER:-health_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-health_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-health_user} -d ${POSTGRES_DB:-health_coach}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fastapi-ai:
+    build:
+      context: ./ai-service
+    container_name: fastapi-ai
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      APP_ENV: docker
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  springboot-app:
+    build:
+      context: ./backend
+    container_name: springboot-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fastapi-ai:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/health_coach}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-health_user}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-health_password}
+      JWT_SECRET: ${JWT_SECRET:-replace_with_a_very_long_secret_key}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      AI_BASE_URL: ${AI_BASE_URL:-http://fastapi-ai:8000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
