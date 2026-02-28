@@ -126,49 +126,52 @@ Skills and agents are listed in `.claude/memory/README.md`. After any `/build-ag
 
 ## Orchestration Model
 
-**All work flows through the Project Manager.** Use `/pm [describe what you need]` as the single entry point for any task. The PM creates an execution plan, routes to specialists, and synthesises results. If a new role is missing, PM uses `/build-agent` to create it automatically.
+**All work flows through the PM.** Use `/pm [describe what you need]` as the single entry point. Claude acts as PM — no separate PM agent is spawned. The PM plans, delegates to the 4 specialist agents, and synthesises results. If a genuinely new role is needed, `/build-agent` creates it.
 
 ```
 /pm "fix the workout API bug"
-  └─ project-manager → java-expert (fix) → qa-tester (verify) → report
+  └─ PM → reviewer (diagnose) → implement fix → qa-tester (verify) → report
 
 /e2e-test
   ├─ devops-engineer  (if services down → deploy first)
   ├─ Android emulator (start if needed)
   ├─ qa-tester        (run tests, document bugs)
-  └─ project-manager  (route bugs to right engineers)
+  └─ reviewer         (diagnose failing tests → implement fixes)
 ```
+
+**Agent selection principle:** Agents are only used when there is a genuine conflict (reviewer vs builder, tester vs developer, adversarial security vs optimistic developer, cautious ops vs fast development). Domain knowledge alone is not a reason to spawn a separate agent.
 
 ## Skills
 All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 
 ### Central Entry Point
-- `/pm [task]` — **Start here for any work.** PM orchestrates all agents needed.
+- `/pm [task]` — **Start here for any work.** Claude acts as PM, routes to specialists.
 
 ### System Growth
-- `/build-agent [role]` — Create a new agent + 2 skills for a missing role. PM calls this automatically when needed.
+- `/build-agent [role]` — Create a new agent only when the 4 existing agents cannot cover the role.
 
 ### Git & Code Quality
 - `/commit-push [msg]` — Stage tracked files, draft/use commit message, commit and push
-- `/code-review [ref]` — Multi-expert parallel review (java + python + flutter agents)
+- `/code-review [ref]` — Spawn `reviewer` on changed files; auto-detects domains, one consolidated report
 
 ### Project Management
 - `/project-status` — Full health dashboard: TODO progress, git velocity, risks, next actions
 - `/standup` — Daily standup: yesterday (git log), today (recommended tasks), blockers
-- `/task-board [add|done|pending]` — View/update `PROJECT_TODO.md` interactively
+- `/task-board [add|done|pending]` — View/update `PROJECT_TODO.MD` interactively
 - `/release-notes [ref range]` — Auto-generate categorised release notes from git history
+- `/prd [focus area]` — Create Product Requirements Document using all 4 agents in parallel
 
 ### QA & Testing
-- `/e2e-test [flow]` — **Full E2E on Android emulator.** Checks services (DevOps deploys if down), starts emulator, runs API + integration tests, routes bugs through PM.
+- `/e2e-test [flow]` — **Full E2E on Android emulator.** Checks services (devops-engineer deploys if down), starts emulator, runs API + integration tests, routes bugs through reviewer.
 - `/qa-report` — Run all unit test suites, get GO/NO-GO from qa-tester
 - `/bug-report [title]` — Guided bug documentation with code search and severity triage
 - `/test-coverage` — Coverage matrix, gap analysis, top 5 tests to write next
 
 ### UI & Design
-- `/ui-review [screen or feature]` — Material Design 3 + accessibility audit via ui-designer. Routes code fixes to flutter-expert via PM.
+- `/ui-review [screen or feature]` — Material Design 3 + accessibility audit via `reviewer` (UX/Mobile domains).
 
 ### Security
-- `/security-audit [full|backend|mobile|ai-service|auth|deps]` — OWASP audit via security-engineer. Routes all fixes through PM.
+- `/security-audit [full|backend|mobile|ai-service|auth|deps]` — OWASP audit via security-engineer.
 
 ### DevOps & Infrastructure
 - `/deploy-check [dev|uat|prod]` — Pre-deploy checklist + env audit. GO/NO-GO before running deploy script.
@@ -176,21 +179,17 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 - `/env-audit [dev|uat|prod|all]` — Audit env files for missing/placeholder secrets
 - `/rollback [dev|uat|prod]` — Root-cause assessment + guided rollback. Always confirms before acting.
 
+### Self-Improvement
+- `/retrospective` — Process accumulated learnings, update agent/skill files system-wide
+- `/improve [name]` — Targeted improvement of one agent or skill using its learnings
+- `/split-skill [name]` — Split an oversized skill into router + focused sub-skills
+
 ## Agents (`.claude/agents/`)
-Each agent has deep project-specific knowledge. All findings route to `project-manager`.
+Only 4 agents exist — each represents a genuine task conflict, not just domain expertise.
 
-### Orchestration
-- `project-manager` — Central coordinator. Routes ALL work. Builds new agents via `/build-agent` when a role is missing.
-
-### Code Experts
-- `java-expert` — Spring Boot, Spring Security, JPA, JWT, REST API design
-- `python-expert` — FastAPI, Pydantic, Gemini AI, async Python
-- `flutter-expert` — Flutter, Dart, Riverpod, Dio, mobile UI
-
-### Quality & Design
-- `qa-tester` — Full E2E incl. Android emulator. Requests deployments from devops if services are down. Routes bugs via PM.
-- `ui-designer` — Material Design 3, accessibility (WCAG), UX flows, design consistency
-
-### Infrastructure & Security
-- `devops-engineer` — Docker, GCP, env validation, deployment, incident response
-- `security-engineer` — OWASP Mobile Top 10, API Security Top 10, JWT, data privacy, CVE scanning
+| Agent | Conflict | When to use |
+|-------|----------|-------------|
+| `reviewer` | Builder vs Reviewer — same context can't objectively review its own code | Code review, UX audit, architecture review, performance analysis, bug diagnosis |
+| `qa-tester` | Developer vs Tester — can't objectively test what you just built | E2E testing, integration verification, GO/NO-GO verdicts |
+| `security-engineer` | Developer vs Attacker — optimistic builder vs adversarial auditor | Security audits, OWASP checks, vulnerability scanning |
+| `devops-engineer` | Implementation vs Operations — fast development vs cautious infra changes | GCP, Docker, deployment, incident response, env validation |
