@@ -4,8 +4,8 @@ server:
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/health_coach}
-    username: ${SPRING_DATASOURCE_USERNAME:health_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:health_password}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -29,7 +29,7 @@ management:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:replace_with_a_very_long_secret_key}
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   ai:
     base-url: ${AI_BASE_URL:http://localhost:8000}
@@ -37,7 +37,7 @@ app:
 
 google:
   client:
-    id: ${GOOGLE_CLIENT_ID:your-google-client-id.apps.googleusercontent.com}
+    id: ${GOOGLE_CLIENT_ID}
 
 logging:
   level:

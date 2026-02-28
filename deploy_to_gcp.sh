@@ -112,16 +112,23 @@ fi
 echo "Enabling required APIs..."
 gcloud services enable compute.googleapis.com --project "$PROJECT_ID" >/dev/null
 
-echo "Ensuring firewall rule exists..."
-gcloud compute firewall-rules create "$FIREWALL_RULE" \
-  --project "$PROJECT_ID" \
-  --direction=INGRESS \
-  --priority=1000 \
-  --network=default \
-  --action=ALLOW \
-  --rules=tcp:22,tcp:8080 \
-  --source-ranges=0.0.0.0/0 \
-  --target-tags="$INSTANCE_NAME" >/dev/null 2>&1 || true
+echo "Ensuring firewall rule exists (HTTP, HTTPS, SSH, and backend)..."
+# Try to update existing rule first; if it doesn't exist, create it
+if gcloud compute firewall-rules describe "$FIREWALL_RULE" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud compute firewall-rules update "$FIREWALL_RULE" \
+    --project "$PROJECT_ID" \
+    --rules=tcp:22,tcp:80,tcp:443,tcp:8080 >/dev/null 2>&1 || true
+else
+  gcloud compute firewall-rules create "$FIREWALL_RULE" \
+    --project "$PROJECT_ID" \
+    --direction=INGRESS \
+    --priority=1000 \
+    --network=default \
+    --action=ALLOW \
+    --rules=tcp:22,tcp:80,tcp:443,tcp:8080 \
+    --source-ranges=0.0.0.0/0 \
+    --target-tags="$INSTANCE_NAME" >/dev/null 2>&1 || true
+fi
 
 if gcloud compute instances describe "$INSTANCE_NAME" --project "$PROJECT_ID" --zone="$ZONE" >/dev/null 2>&1; then
   echo "Instance already exists: $INSTANCE_NAME"
@@ -158,7 +165,7 @@ tar $TAR_OPTS "$TARBALL" \
   --exclude='ai-service/app/**/__pycache__' \
   --exclude='mobile' \
   --exclude='._*' \
-  "$COMPOSE_FILE" "$ENV_FILE" backend ai-service
+  "$COMPOSE_FILE" "$ENV_FILE" backend ai-service nginx
 
 echo "Uploading package..."
 gcloud compute scp --project "$PROJECT_ID" --zone="$ZONE" "$TARBALL" "$INSTANCE_NAME:~/health-coach.tar.gz"
@@ -188,5 +195,18 @@ sudo docker-compose up -d --build
 
 PUBLIC_IP="$(gcloud compute instances describe "$INSTANCE_NAME" --project "$PROJECT_ID" --zone="$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
 echo "Deployment complete for $ENVIRONMENT"
-echo "Backend URL: http://${PUBLIC_IP}:8080"
-echo "Health check: http://${PUBLIC_IP}:8080/actuator/health"
+echo ""
+echo "  HTTP URL:     http://${PUBLIC_IP}"
+echo "  Health check: http://${PUBLIC_IP}/actuator/health"
+echo ""
+# NOTE: Port 8080 is no longer exposed directly to the host.
+# nginx (port 80) now proxies all traffic to springboot-app:8080 internally.
+#
+# To enable full HTTPS once a domain is available:
+#   1. Point your domain A record to ${PUBLIC_IP}
+#   2. Update nginx/nginx.conf: set server_name, uncomment HTTPS server block,
+#      replace YOUR_DOMAIN_HERE, enable the 301 redirect in the HTTP block.
+#   3. Update the certbot command in docker-compose.prod.yml with your domain.
+#   4. Re-run this deploy script, then on the VM run:
+#        docker-compose -f /opt/health-coach/docker-compose.yml run --rm certbot
+#   5. See docs/HTTPS_SETUP.md for the full step-by-step guide.

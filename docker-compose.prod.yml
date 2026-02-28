@@ -36,8 +36,7 @@ services:
       dockerfile: Dockerfile
     container_name: health-coach-backend
     restart: always
-    ports:
-      - "8080:8080"
+    # Port 8080 is NOT exposed to the host; nginx handles all ingress
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
@@ -57,9 +56,42 @@ services:
       fastapi-ai:
         condition: service_started
 
+  nginx:
+    image: nginx:alpine
+    container_name: health-coach-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    networks:
+      - health-network
+    depends_on:
+      - springboot-app
+
+  certbot:
+    image: certbot/certbot
+    container_name: health-coach-certbot
+    restart: "no"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    command: >
+      certonly --webroot
+      -w /var/www/certbot
+      --email admin@healthcoach.app
+      --agree-tos
+      --no-eff-email
+      -d YOUR_DOMAIN_HERE
+
 volumes:
   postgres_data:
   app_uploads:
+  letsencrypt:
+  certbot_www:
 
 networks:
   health-network:

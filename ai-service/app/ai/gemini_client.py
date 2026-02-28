@@ -5,13 +5,15 @@ import google.generativeai as genai
 class GeminiClient:
     def __init__(self) -> None:
         api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY environment variable is not set or is empty. "
+                "The AI service cannot start without a valid Gemini API key."
+            )
         self.model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        self.enabled = bool(api_key)
-        if self.enabled:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(self.model_name)
-        else:
-            self.model = None
+        self.enabled = True
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(self.model_name)
 
     def generate_json(self, system_prompt: str, user_prompt: str, contents: list | None = None) -> dict:
         if not self.enabled or self.model is None:
