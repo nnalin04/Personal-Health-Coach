@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "Personal Health Coach",
+			"path": "."
+		},
+		{
+			"name": "signup_screen",
+			"path": "../../../Downloads/stitch 2/signup_screen"
+		},
+		{
+			"name": "stitch",
+			"path": "../../../Downloads/stitch"
+		},
+		{
+			"name": "login_screen",
+			"path": "../../../Downloads/stitch 2/login_screen"
+		}
+	],
+	"settings": {}
+}

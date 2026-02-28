@@ -1,23 +1,29 @@
 # OS
 .DS_Store
 
-# Env
+# Claude AI configuration (local agent/skill definitions)
+.claude/
+
+# Env — all env files (only .env.*.tmpl and .env.example should be committed)
 .env
-.env.dev
-.env.uat
-.env.prod
+.env.*
+env.dev
+env.uat
+env.prod
 .keytool
+
+# Python virtual environments
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
 
 # Java
 backend/target/
 backend/.mvn/
 backend/mvnw
 backend/mvnw.cmd
-
-# Python
-ai-service/.venv/
-ai-service/__pycache__/
-ai-service/.pytest_cache/
 
 # Flutter/Dart
 mobile/.dart_tool/
@@ -35,3 +41,12 @@ mobile/pubspec.lock
 mobile/android/key.properties
 mobile/android/app/keystores/
 mobile/android/app/google-services.json
+mobile/android/local.properties
+
+# Debug/temp screenshots and UI dumps (emulator testing artifacts)
+mobile/*.png
+mobile/*.xml
+
+# Design reference assets (large binary files, not source code)
+stitch/
+reference/

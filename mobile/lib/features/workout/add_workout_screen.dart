@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../auth/auth_provider.dart';
 
 class AddWorkoutScreen extends ConsumerStatefulWidget {
@@ -38,6 +39,7 @@ class _AddWorkoutScreenState extends ConsumerState<AddWorkoutScreen> {
         'weight': double.tryParse(_weight.text) ?? 0,
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
       });
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Workout saved')),
@@ -45,8 +47,12 @@ class _AddWorkoutScreenState extends ConsumerState<AddWorkoutScreen> {
       Navigator.of(context).pop();
     } on DioException catch (e) {
       if (!mounted) return;
+      final data = e.response?.data;
+      final message = data is Map<String, dynamic>
+          ? data['message']?.toString() ?? 'Save failed'
+          : 'Save failed';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.response?.data['message']?.toString() ?? 'Save failed')),
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -60,51 +66,63 @@ class _AddWorkoutScreenState extends ConsumerState<AddWorkoutScreen> {
       lastDate: DateTime.now(),
       initialDate: _selectedDate,
     );
-    if (date != null) {
-      setState(() => _selectedDate = date);
-    }
+    if (date != null) setState(() => _selectedDate = date);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Workout')),
-      body: Padding(
+      appBar: AppBar(title: const Text('Log Workout')),
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            _field(_exercise, 'Exercise Name'),
-            _field(_sets, 'Sets', keyboardType: TextInputType.number),
-            _field(_reps, 'Reps', keyboardType: TextInputType.number),
-            _field(_weight, 'Weight (kg)', keyboardType: TextInputType.number),
-            const SizedBox(height: 12),
-            ListTile(
-              tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
-              title: Text('Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: _pickDate,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  _field(_exercise, 'Exercise name'),
+                  _field(_sets, 'Sets', type: TextInputType.number),
+                  _field(_reps, 'Reps', type: TextInputType.number),
+                  _field(_weight, 'Weight (kg)', type: TextInputType.number),
+                  const SizedBox(height: 6),
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    tileColor: Theme.of(context).colorScheme.surface,
+                    title: Text('Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}'),
+                    trailing: const Icon(Icons.calendar_today_rounded),
+                    onTap: _pickDate,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const CircularProgressIndicator()
-                  : const Text('Save Workout'),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _loading ? null : _submit,
+            child: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Save Workout'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _field(TextEditingController controller, String label,
-      {TextInputType keyboardType = TextInputType.text}) {
+  Widget _field(TextEditingController controller, String hint,
+      {TextInputType type = TextInputType.text}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: controller,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(labelText: label),
+        keyboardType: type,
+        decoration: InputDecoration(hintText: hint),
       ),
     );
   }

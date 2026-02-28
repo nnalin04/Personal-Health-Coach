@@ -2,9 +2,12 @@ package com.healthcoach.aiclient;
 
 import com.healthcoach.aiclient.dto.AiHealthResponse;
 import com.healthcoach.aiclient.dto.AnalyzeHealthRequest;
+import com.healthcoach.aiclient.dto.ExtractMetricsRequest;
+import com.healthcoach.aiclient.dto.ExtractMetricsResponse;
 import com.healthcoach.aiclient.dto.ParseMedicalReportRequest;
 import com.healthcoach.aiclient.dto.ParseMedicalReportResponse;
 import com.healthcoach.aiclient.dto.ParsedLabValues;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +40,23 @@ public class AiServiceClient {
             return response;
         } catch (RestClientException ex) {
             return defaultInsights();
+        }
+    }
+
+    public ExtractMetricsResponse extractMetrics(String text) {
+        try {
+            ExtractMetricsRequest request = new ExtractMetricsRequest(text);
+            ExtractMetricsResponse response = restTemplate.postForObject(
+                    aiBaseUrl + "/extract-metrics",
+                    request,
+                    ExtractMetricsResponse.class
+            );
+            if (response == null) {
+                return new ExtractMetricsResponse(Collections.emptyList(), text);
+            }
+            return response;
+        } catch (RestClientException ex) {
+            return new ExtractMetricsResponse(Collections.emptyList(), text);
         }
     }
 
