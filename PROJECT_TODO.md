@@ -85,6 +85,31 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 
 ---
 
+## 10) Nutrient Intelligence Feature
+> Full plan: `plans/nutrient_intelligence_plan.md`
+
+### Phase 1 — Foundation
+- [ ] Add `NutrientLog` entity + Flyway migration (Backend)
+- [ ] Add `POST /food/analyze-nutrients` endpoint in AI service (Gemini vision + text → micronutrients)
+- [ ] Add `GET /nutrient/daily-summary` and `/nutrient/weekly-trends` endpoints (Backend)
+- [ ] Add RDA constants service in backend (per gender/age)
+- [ ] Wire food log save to also trigger nutrient analysis asynchronously
+
+### Phase 2 — Recommendations
+- [ ] Add `region`, `cuisine_style`, `dietary_restrictions` to user profile
+- [ ] Add onboarding step to collect region + dietary preferences
+- [ ] Add `POST /nutrient/recommendations` in AI service (14-day deficiency → Gemini → culturally-aware advice)
+- [ ] Infer cuisine style from food log history (majority vote on recognized food types)
+
+### Phase 3 — Mobile UX
+- [ ] Add camera 📷 and text describe ✏️ input buttons to Food Log screen
+- [ ] Build nutrient breakdown card (shows after food log: vitamins/minerals vs RDA)
+- [ ] Build Nutrient Dashboard screen (weekly heatmap of micronutrient coverage)
+- [ ] Add Nutrition Intelligence section to Insights screen (top deficiencies + cultural food suggestions)
+- [ ] Add daily push notification summarising deficiencies (optional, user-toggleable)
+
+---
+
 ## Work Completed in This Iteration
 
 - [x] Implemented runtime API Base URL support in mobile app.
