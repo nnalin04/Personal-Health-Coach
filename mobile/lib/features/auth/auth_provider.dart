@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../../core/cache/local_cache.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/app_config_storage.dart';
 import '../../core/storage/token_storage.dart';
@@ -185,6 +186,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await tokenStorage.clearToken();
+    await LocalCache.clear(); // Wipe all cached data on logout
     apiClient.setAuthToken(null);
     state = state.copyWith(
       initialized: true,

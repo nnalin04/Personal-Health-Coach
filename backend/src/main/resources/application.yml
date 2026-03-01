@@ -30,7 +30,7 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    expiration-ms: ${JWT_EXPIRATION_MS:2592000000}  # 30 days default (2592000000 ms)
   ai:
     base-url: ${AI_BASE_URL:http://localhost:8000}
   upload-dir: ${UPLOAD_DIR:uploads}

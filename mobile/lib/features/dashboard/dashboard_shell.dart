@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/auth_provider.dart';
 import '../chat/chat_screen.dart';
 import '../logging/logging_screen.dart';
 import '../medical/medical_hub_screen.dart';
-import '../medical/upload_medical_report_screen.dart';
 import '../profile/profile_settings_screen.dart';
-import '../trends/view_trends_screen.dart';
 import 'dashboard_screen.dart';
 
 class DashboardShell extends ConsumerStatefulWidget {
@@ -25,21 +22,11 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
     LoggingScreen(),
     MedicalHubScreen(),
     ChatScreen(),
-  ];
-
-
-  static const _titles = [
-    'Dashboard',
-    'Trends',
-    'AI Health Chat',
-    'Insights',
-    'Profile',
+    ProfileSettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       body: SafeArea(
         top: false,
@@ -68,6 +55,11 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
             icon: Icon(Icons.chat_bubble_rounded),
             selectedIcon: Icon(Icons.chat_bubble_rounded),
             label: 'Chat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
           ),
         ],
       ),

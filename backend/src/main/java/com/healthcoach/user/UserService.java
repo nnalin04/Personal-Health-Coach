@@ -22,12 +22,12 @@ public class UserService {
     @Transactional
     public User updateProfile(Long userId, UpdateProfileRequest request) {
         User user = getById(userId);
-        user.setAge(request.age());
-        user.setGender(request.gender());
-        user.setHeight(request.height());
-        user.setGoal(request.goal());
-        user.setDietType(request.dietType());
-        user.setMedicalFlags(request.medicalFlags());
+        if (request.age() != null) user.setAge(request.age());
+        if (request.gender() != null) user.setGender(request.gender());
+        if (request.height() != null) user.setHeight(request.height());
+        if (request.goal() != null) user.setGoal(request.goal());
+        if (request.dietType() != null) user.setDietType(request.dietType());
+        if (request.medicalFlags() != null) user.setMedicalFlags(request.medicalFlags());
         return userRepository.save(user);
     }
 }

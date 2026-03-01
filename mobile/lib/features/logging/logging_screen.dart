@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/cache/local_cache.dart';
 import '../auth/auth_provider.dart';
+import '../body_metrics/add_body_metrics_screen.dart';
+import '../food/add_food_screen.dart';
+import '../workout/add_workout_screen.dart';
 
 class LoggingScreen extends ConsumerStatefulWidget {
   const LoggingScreen({super.key});
@@ -15,8 +19,12 @@ class LoggingScreen extends ConsumerStatefulWidget {
 
 class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  Map<String, dynamic>? _summary;
+
+  List<Map<String, dynamic>> _workouts = [];
+  List<Map<String, dynamic>> _foods = [];
+  List<Map<String, dynamic>> _metrics = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,15 +34,63 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTicker
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    try {
-      final res = await ref.read(apiClientProvider).get('/health-summary/me');
+    // Show cached data immediately so the user is never in the dark
+    final cachedWorkouts = LocalCache.get<List>('logs_workouts');
+    final cachedFoods = LocalCache.get<List>('logs_foods');
+    final cachedMetrics = LocalCache.get<List>('logs_metrics');
+    if (cachedWorkouts != null || cachedFoods != null || cachedMetrics != null) {
       setState(() {
-        _summary = Map<String, dynamic>.from(res.data);
+        if (cachedWorkouts != null) _workouts = List<Map<String, dynamic>>.from(cachedWorkouts);
+        if (cachedFoods != null) _foods = List<Map<String, dynamic>>.from(cachedFoods);
+        if (cachedMetrics != null) _metrics = List<Map<String, dynamic>>.from(cachedMetrics);
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } else {
+      setState(() { _loading = true; _error = null; });
+    }
+
+    // Then fetch fresh data from network in background
+    try {
+      final from = DateFormat('yyyy-MM-dd').format(DateTime.now().subtract(const Duration(days: 30)));
+      final to = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final client = ref.read(apiClientProvider);
+
+      final results = await Future.wait([
+        client.get('/workouts', queryParameters: {'from': from, 'to': to}),
+        client.get('/foods', queryParameters: {'from': from, 'to': to}),
+        client.get('/body-metrics', queryParameters: {'from': from, 'to': to}),
+      ]);
+
+      final freshWorkouts = List<Map<String, dynamic>>.from(results[0].data as List);
+      final freshFoods = List<Map<String, dynamic>>.from(results[1].data as List);
+      final freshMetrics = List<Map<String, dynamic>>.from(results[2].data as List);
+
+      // Persist to cache (5 minute TTL — data changes frequently)
+      await Future.wait([
+        LocalCache.put('logs_workouts', freshWorkouts, ttlSeconds: 300),
+        LocalCache.put('logs_foods', freshFoods, ttlSeconds: 300),
+        LocalCache.put('logs_metrics', freshMetrics, ttlSeconds: 300),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _workouts = freshWorkouts;
+          _foods = freshFoods;
+          _metrics = freshMetrics;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } on DioException catch (e) {
+      if (mounted) {
+        setState(() {
+          // Only show error if we have no cached data to show
+          if (_workouts.isEmpty && _foods.isEmpty && _metrics.isEmpty) {
+            _error = e.response?.data?['message']?.toString() ?? 'No connection — showing last cached data';
+          }
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -42,6 +98,18 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTicker
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _navigateToAdd(BuildContext context) {
+    final routes = [
+      const AddWorkoutScreen(),
+      const AddFoodScreen(),
+      const AddBodyMetricsScreen(),
+    ];
+    final screen = routes[_tabController.index];
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => screen))
+        .then((_) => _loadData());
   }
 
   @override
@@ -65,13 +133,6 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTicker
             const Text('Activity Logs', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.calendar_today_rounded, size: 20),
-          ),
-          const SizedBox(width: 8),
-        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorSize: TabBarIndicatorSize.tab,
@@ -87,16 +148,30 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTicker
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _WorkoutsTab(summary: _summary),
-                _NutritionTab(summary: _summary),
-                _MetricsTab(summary: _summary),
-              ],
-            ),
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                      const SizedBox(height: 12),
+                      TextButton(onPressed: _loadData, child: const Text('Retry')),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _WorkoutsTab(workouts: _workouts),
+                      _NutritionTab(foods: _foods),
+                      _MetricsTab(metrics: _metrics),
+                    ],
+                  ),
+                ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () => _navigateToAdd(context),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -106,43 +181,47 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> with SingleTicker
   }
 }
 
+// ─── Workouts Tab ──────────────────────────────────────────────────────────────
+
 class _WorkoutsTab extends StatelessWidget {
-  final Map<String, dynamic>? summary;
-  const _WorkoutsTab({required this.summary});
+  final List<Map<String, dynamic>> workouts;
+  const _WorkoutsTab({required this.workouts});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    if (workouts.isEmpty) {
+      return const Center(child: Text('No workouts logged yet.', style: TextStyle(color: Colors.grey)));
+    }
+
+    // Sort newest first
+    final sorted = [...workouts]..sort((a, b) {
+        final da = a['date'] as String? ?? '';
+        final db = b['date'] as String? ?? '';
+        return db.compareTo(da);
+      });
+
+    return ListView.separated(
       padding: const EdgeInsets.all(20),
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Today's Activities",
-              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5),
-            ),
-            Text(
-              DateFormat('MMM d, yyyy').format(DateTime.now()),
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 12),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _WorkoutItem(
-          title: 'Upper Body Power',
-          subtitle: '60 min • Strength',
-          trailing: '420 kcal',
+      itemCount: sorted.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        final w = sorted[i];
+        final name = w['exerciseName'] as String? ?? 'Workout';
+        final sets = w['sets'] as int? ?? 0;
+        final reps = w['reps'] as int? ?? 0;
+        final weight = (w['weight'] as num?)?.toDouble() ?? 0;
+        final date = w['date'] as String? ?? '';
+        final dateLabel = date.isNotEmpty
+            ? DateFormat('MMM d').format(DateTime.parse(date))
+            : '';
+
+        return _WorkoutItem(
+          title: name,
+          subtitle: '$sets sets × $reps reps${weight > 0 ? ' · ${weight.toStringAsFixed(1)} kg' : ''}',
+          trailing: dateLabel,
           icon: Icons.fitness_center_rounded,
-        ),
-        const SizedBox(height: 12),
-        _WorkoutItem(
-          title: 'Steady State Cardio',
-          subtitle: '30 min • Zone 2',
-          trailing: '280 kcal',
-          icon: Icons.directions_run_rounded,
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -185,28 +264,46 @@ class _WorkoutItem extends StatelessWidget {
               ],
             ),
           ),
-          Text(trailing, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
+          Text(trailing, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
         ],
       ),
     );
   }
 }
 
+// ─── Nutrition Tab ─────────────────────────────────────────────────────────────
+
 class _NutritionTab extends StatelessWidget {
-  final Map<String, dynamic>? summary;
-  const _NutritionTab({required this.summary});
+  final List<Map<String, dynamic>> foods;
+  const _NutritionTab({required this.foods});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (foods.isEmpty) {
+      return const Center(child: Text('No meals logged yet.', style: TextStyle(color: Colors.grey)));
+    }
+
+    // Aggregate today's totals
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final todayFoods = foods.where((f) => (f['date'] as String? ?? '') == today).toList();
+    final totalCalories = todayFoods.fold<double>(0, (s, f) => s + ((f['calories'] as num?)?.toDouble() ?? 0));
+    final totalProtein = todayFoods.fold<double>(0, (s, f) => s + ((f['protein'] as num?)?.toDouble() ?? 0));
+    final totalCarbs = todayFoods.fold<double>(0, (s, f) => s + ((f['carbs'] as num?)?.toDouble() ?? 0));
+    final totalFats = todayFoods.fold<double>(0, (s, f) => s + ((f['fats'] as num?)?.toDouble() ?? 0));
+
+    // Sort newest first
+    final sorted = [...foods]..sort((a, b) {
+        final da = a['date'] as String? ?? '';
+        final db = b['date'] as String? ?? '';
+        return db.compareTo(da);
+      });
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          "Nutrient Breakdown",
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5),
-        ),
-        const SizedBox(height: 16),
+        // Summary card
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -225,39 +322,28 @@ class _NutritionTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '1,840',
+                        totalCalories.toStringAsFixed(0),
                         style: GoogleFonts.inter(fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: -1.5, color: Colors.white),
                       ),
                       Text(
-                        'kcal consumed today',
+                        'kcal today',
                         style: GoogleFonts.inter(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 14),
                       ),
                     ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      'Goal: 2,200',
-                      style: GoogleFonts.inter(color: theme.colorScheme.primary, fontWeight: FontWeight.w800, fontSize: 12),
-                    ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               Row(
                 children: [
-                  _MacroItem(label: 'Protein', value: '142g', ratio: 0.75, color: const Color(0xFF3B82F6)),
+                  _MacroItem(label: 'Protein', value: '${totalProtein.toStringAsFixed(0)}g', ratio: (totalProtein / 150).clamp(0, 1), color: const Color(0xFF3B82F6)),
                   const SizedBox(width: 12),
-                  _MacroItem(label: 'Carbs', value: '210g', ratio: 0.6, color: const Color(0xFF10B981)),
+                  _MacroItem(label: 'Carbs', value: '${totalCarbs.toStringAsFixed(0)}g', ratio: (totalCarbs / 250).clamp(0, 1), color: const Color(0xFF10B981)),
                   const SizedBox(width: 12),
-                  _MacroItem(label: 'Fat', value: '58g', ratio: 0.45, color: const Color(0xFFF59E0B)),
+                  _MacroItem(label: 'Fat', value: '${totalFats.toStringAsFixed(0)}g', ratio: (totalFats / 80).clamp(0, 1), color: const Color(0xFFF59E0B)),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               const Row(
                 children: [
                   Icon(Icons.history_rounded, size: 16, color: Colors.grey),
@@ -266,17 +352,42 @@ class _NutritionTab extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              _MealBriefItem(title: 'Breakfast', subtitle: 'Oatmeal, Banana, Whey', calories: '450 kcal', icon: Icons.wb_sunny_rounded),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, thickness: 0.5, color: Color(0xFF262F36)),
-              ),
-              _MealBriefItem(title: 'Lunch', subtitle: 'Chicken Salad, Quinoa Bowl', calories: '620 kcal', icon: Icons.lunch_dining_rounded),
+              ...sorted.take(5).map((food) {
+                final name = food['foodName'] as String? ?? 'Food';
+                final meal = food['mealType'] as String? ?? '';
+                final cal = (food['calories'] as num?)?.toDouble() ?? 0;
+                final icon = _mealIcon(meal);
+                return Column(
+                  children: [
+                    _MealBriefItem(
+                      title: meal,
+                      subtitle: name,
+                      calories: '${cal.toStringAsFixed(0)} kcal',
+                      icon: icon,
+                    ),
+                    if (sorted.indexOf(food) < sorted.take(5).length - 1)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(height: 1, thickness: 0.5, color: Color(0xFF262F36)),
+                      ),
+                  ],
+                );
+              }),
             ],
           ),
         ),
       ],
     );
+  }
+
+  IconData _mealIcon(String meal) {
+    switch (meal.toLowerCase()) {
+      case 'breakfast': return Icons.wb_sunny_rounded;
+      case 'lunch':     return Icons.lunch_dining_rounded;
+      case 'dinner':    return Icons.dinner_dining_rounded;
+      case 'snack':     return Icons.cookie_rounded;
+      default:          return Icons.restaurant_rounded;
+    }
   }
 }
 
@@ -336,10 +447,7 @@ class _MealBriefItem extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: theme.colorScheme.primary, size: 18),
         ),
         const SizedBox(width: 14),
@@ -358,29 +466,103 @@ class _MealBriefItem extends StatelessWidget {
   }
 }
 
+// ─── Metrics Tab ───────────────────────────────────────────────────────────────
+
 class _MetricsTab extends StatelessWidget {
-  final Map<String, dynamic>? summary;
-  const _MetricsTab({required this.summary});
+  final List<Map<String, dynamic>> metrics;
+  const _MetricsTab({required this.metrics});
 
   @override
   Widget build(BuildContext context) {
+    if (metrics.isEmpty) {
+      return const Center(child: Text('No metrics logged yet.', style: TextStyle(color: Colors.grey)));
+    }
+
+    final sorted = [...metrics]..sort((a, b) {
+        final da = a['date'] as String? ?? '';
+        final db = b['date'] as String? ?? '';
+        return db.compareTo(da);
+      });
+
+    final latest = sorted.first;
+    final latestWeight = (latest['weight'] as num?)?.toDouble();
+    final latestBmi = (latest['bmi'] as num?)?.toDouble();
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          "Current Vitals",
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5),
-        ),
+        Text('Current Vitals', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5)),
         const SizedBox(height: 16),
         Row(
           children: [
-            _MetricCard(label: 'Weight', value: '78.4', unit: 'kg', trend: '-0.5kg week', icon: Icons.monitor_weight_rounded, trendColor: Colors.green),
+            _MetricCard(
+              label: 'Weight',
+              value: latestWeight != null ? latestWeight.toStringAsFixed(1) : '--',
+              unit: 'kg',
+              trend: 'Last 30 days',
+              icon: Icons.monitor_weight_rounded,
+            ),
             const SizedBox(width: 16),
-            _MetricCard(label: 'BMI', value: '23.2', unit: '', trend: 'Optimal Range', icon: Icons.accessibility_new_rounded),
+            _MetricCard(
+              label: 'BMI',
+              value: latestBmi != null ? latestBmi.toStringAsFixed(1) : '--',
+              unit: '',
+              trend: latestBmi != null ? _bmiCategory(latestBmi) : '--',
+              icon: Icons.accessibility_new_rounded,
+              trendColor: latestBmi != null ? _bmiColor(latestBmi) : Colors.grey,
+            ),
           ],
         ),
+        const SizedBox(height: 24),
+        Text('History', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: -0.3)),
+        const SizedBox(height: 12),
+        ...sorted.map((m) {
+          final date = m['date'] as String? ?? '';
+          final w = (m['weight'] as num?)?.toDouble();
+          final bmi = (m['bmi'] as num?)?.toDouble();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E262C),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF262F36)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    date.isNotEmpty ? DateFormat('MMM d, yyyy').format(DateTime.parse(date)) : '',
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
+                  ),
+                ),
+                if (w != null)
+                  Text('${w.toStringAsFixed(1)} kg', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800)),
+                if (bmi != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text('BMI ${bmi.toStringAsFixed(1)}', style: GoogleFonts.inter(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+          );
+        }),
       ],
     );
+  }
+
+  String _bmiCategory(double bmi) {
+    if (bmi < 18.5) return 'Underweight';
+    if (bmi < 25.0) return 'Optimal Range';
+    if (bmi < 30.0) return 'Overweight';
+    return 'Obese';
+  }
+
+  Color _bmiColor(double bmi) {
+    if (bmi < 18.5) return Colors.blue;
+    if (bmi < 25.0) return Colors.green;
+    if (bmi < 30.0) return Colors.orange;
+    return Colors.red;
   }
 }
 
