@@ -51,6 +51,15 @@ public class User {
     @Column(nullable = false)
     private UserRole role = UserRole.ROLE_USER;
 
+    @Column(name = "region")
+    private String region;
+
+    @Column(name = "cuisine_style", length = 100)
+    private String cuisineStyle;
+
+    @Column(name = "dietary_restrictions", columnDefinition = "TEXT")
+    private String dietaryRestrictions;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -137,6 +146,30 @@ public class User {
 
     public void setRole(UserRole role) {
         this.role = role;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
+    }
+
+    public String getCuisineStyle() {
+        return cuisineStyle;
+    }
+
+    public void setCuisineStyle(String cuisineStyle) {
+        this.cuisineStyle = cuisineStyle;
+    }
+
+    public String getDietaryRestrictions() {
+        return dietaryRestrictions;
+    }
+
+    public void setDietaryRestrictions(String dietaryRestrictions) {
+        this.dietaryRestrictions = dietaryRestrictions;
     }
 
     public Instant getCreatedAt() {
