@@ -50,3 +50,6 @@ mobile/*.xml
 # Design reference assets (large binary files, not source code)
 stitch/
 reference/
+
+# E2E test scripts (may contain test credentials / generate QA accounts)
+e2e_prod_test.py
