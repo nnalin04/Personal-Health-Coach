@@ -4,22 +4,20 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 
 ## 1) Infrastructure and Hosting
 
-- [ ] Provision a public server/VPS (or cloud) for `springboot-app`, `fastapi-ai`, and `postgres`.
-- [ ] Set DNS records for public API domain (example: `api.yourdomain.com`).
-- [ ] Add HTTPS/TLS (Let's Encrypt or managed cert) in front of Spring Boot (Nginx/Caddy/Cloud LB).
+- [x] Provision a public server/VPS (or cloud) for `springboot-app`, `fastapi-ai`, and `postgres`.
+      → GCP Compute Engine (health-coach-dev @ 34.45.115.228)
+- [x] Set DNS records for public API domain.
+      → DuckDNS: healthcoach.duckdns.org → 34.45.115.228
+- [x] Add HTTPS/TLS (Let's Encrypt, valid until 2026-05-30) via nginx reverse proxy.
 - [ ] Restrict AI service to private/internal network only (no public ingress on FastAPI).
-- [ ] Configure persistent storage volumes for Postgres and uploaded reports.
-- [ ] Configure automated Postgres backups and restore test.
+- [x] Configure persistent storage volumes for Postgres (docker volume) and uploaded reports.
+- [x] Configure automated Postgres backups (daily pg_dump to GCS gs://health-coach-db-backups at 02:00 UTC).
 
 ## 2) Secrets and Environment
 
-- [ ] Set strong production secrets:
-  - `JWT_SECRET`
-  - `POSTGRES_PASSWORD`
-  - `GEMINI_API_KEY`
-  - `GOOGLE_CLIENT_ID`
-- [ ] Store secrets in a secret manager or protected `.env` (never commit).
-- [ ] Set production `SPRING_DATASOURCE_*`, `AI_BASE_URL`, and upload directory path.
+- [x] Set strong production secrets (JWT_SECRET, POSTGRES_PASSWORD, GEMINI_API_KEY, GOOGLE_CLIENT_ID).
+- [x] Store secrets in GCP Secret Manager (7 secrets created: health-coach-*) — referenced in prod .env on VM.
+- [x] Set production `SPRING_DATASOURCE_*`, `AI_BASE_URL`, and upload directory path.
 
 ## 3) Backend and AI Runtime
 
@@ -118,3 +116,8 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Built release APK successfully:
   - `mobile/build/app/outputs/flutter-apk/app-release.apk`
 - [x] Automated GCP Backend deployment on Ubuntu 22.04 LTS.
+- [x] HTTPS live at healthcoach.duckdns.org (TLSv1.3, Let's Encrypt).
+- [x] All 11 API flows pass E2E against live production (2026-03-01).
+- [x] Upgraded Gemini 1.5-flash → 2.5-flash (1.5 retired/404).
+- [x] Nutrient Intelligence Phase 1: food photo/text analysis, micronutrient tracking vs RDA,
+      culturally-aware recommendations. Full plan at `plans/nutrient_intelligence_plan.md`.
