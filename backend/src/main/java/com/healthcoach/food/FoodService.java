@@ -1,5 +1,6 @@
 package com.healthcoach.food;
 
+import com.healthcoach.nutrient.NutrientIntegrationService;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserService;
 import com.healthcoach.food.dto.FoodLogRequest;
@@ -12,10 +13,12 @@ public class FoodService {
 
     private final FoodLogRepository foodLogRepository;
     private final UserService userService;
+    private final NutrientIntegrationService nutrientIntegrationService;
 
-    public FoodService(FoodLogRepository foodLogRepository, UserService userService) {
+    public FoodService(FoodLogRepository foodLogRepository, UserService userService, NutrientIntegrationService nutrientIntegrationService) {
         this.foodLogRepository = foodLogRepository;
         this.userService = userService;
+        this.nutrientIntegrationService = nutrientIntegrationService;
     }
 
     public FoodLog create(Long userId, FoodLogRequest request) {
@@ -29,7 +32,9 @@ public class FoodService {
         log.setFats(request.fats());
         log.setCalories(request.calories());
         log.setDate(request.date());
-        return foodLogRepository.save(log);
+        FoodLog saved = foodLogRepository.save(log);
+        nutrientIntegrationService.analyzeAndSaveAsync(saved, user);
+        return saved;
     }
 
     public List<FoodLog> getByUser(Long userId, LocalDate from, LocalDate to) {

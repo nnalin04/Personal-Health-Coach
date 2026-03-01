@@ -19,6 +19,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   final _goal = TextEditingController();
   final _dietType = TextEditingController();
   final _medicalFlags = TextEditingController();
+  // Nutrition preference fields
+  final _region = TextEditingController();
+  final _cuisineStyle = TextEditingController();
+  final _dietaryRestrictions = TextEditingController();
   bool _loading = false;
 
   @override
@@ -36,6 +40,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     _goal.dispose();
     _dietType.dispose();
     _medicalFlags.dispose();
+    _region.dispose();
+    _cuisineStyle.dispose();
+    _dietaryRestrictions.dispose();
     super.dispose();
   }
 
@@ -56,6 +63,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       _goal.text = (user['goal'] ?? '').toString();
       _dietType.text = (user['dietType'] ?? '').toString();
       _medicalFlags.text = (user['medicalFlags'] ?? '').toString();
+      _region.text = (user['region'] ?? '').toString();
+      _cuisineStyle.text = (user['cuisineStyle'] ?? '').toString();
+      _dietaryRestrictions.text = (user['dietaryRestrictions'] ?? '').toString();
     });
   }
 
@@ -80,6 +90,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         'goal': _goal.text.trim(),
         'dietType': _dietType.text.trim(),
         'medicalFlags': _medicalFlags.text.trim(),
+        'region': _region.text.trim().isEmpty ? null : _region.text.trim(),
+        'cuisineStyle': _cuisineStyle.text.trim().isEmpty ? null : _cuisineStyle.text.trim(),
+        'dietaryRestrictions': _dietaryRestrictions.text.trim().isEmpty ? null : _dietaryRestrictions.text.trim(),
       });
 
       await ref.read(authControllerProvider.notifier).refreshUser();
@@ -146,6 +159,22 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         _field(_goal, 'Goal'),
         _field(_dietType, 'Diet Type'),
         _field(_medicalFlags, 'Medical Flags', type: TextInputType.multiline, maxLines: 3),
+        const _SectionTitle('Nutrition Preferences'),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Personalises food recommendations to your region and cuisine.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
+        _field(_region, 'Region (e.g. Bihar, India)'),
+        _field(_cuisineStyle, 'Cuisine style (e.g. north_indian, south_indian)'),
+        _field(
+          _dietaryRestrictions,
+          'Dietary restrictions (e.g. vegetarian, no pork)',
+          type: TextInputType.multiline,
+          maxLines: 2,
+        ),
         const SizedBox(height: 12),
         FilledButton(
           onPressed: _loading ? null : _save,

@@ -14,7 +14,10 @@ public record UserProfileResponse(
         String dietType,
         String medicalFlags,
         UserRole role,
-        Instant createdAt
+        Instant createdAt,
+        String region,
+        String cuisineStyle,
+        String dietaryRestrictions
 ) {
     public static UserProfileResponse from(User user) {
         return new UserProfileResponse(
@@ -27,7 +30,10 @@ public record UserProfileResponse(
                 user.getDietType(),
                 user.getMedicalFlags(),
                 user.getRole(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.getRegion(),
+                user.getCuisineStyle(),
+                user.getDietaryRestrictions()
         );
     }
 }

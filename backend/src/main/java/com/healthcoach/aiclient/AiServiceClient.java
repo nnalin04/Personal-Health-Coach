@@ -4,6 +4,10 @@ import com.healthcoach.aiclient.dto.AiHealthResponse;
 import com.healthcoach.aiclient.dto.AnalyzeHealthRequest;
 import com.healthcoach.aiclient.dto.ExtractMetricsRequest;
 import com.healthcoach.aiclient.dto.ExtractMetricsResponse;
+import com.healthcoach.aiclient.dto.NutrientAnalyzeRequest;
+import com.healthcoach.aiclient.dto.NutrientAnalyzeResponse;
+import com.healthcoach.aiclient.dto.NutrientRecommendationRequest;
+import com.healthcoach.aiclient.dto.NutrientRecommendationResponse;
 import com.healthcoach.aiclient.dto.ParseMedicalReportRequest;
 import com.healthcoach.aiclient.dto.ParseMedicalReportResponse;
 import com.healthcoach.aiclient.dto.ParsedLabValues;
@@ -77,6 +81,45 @@ public class AiServiceClient {
             return new ParseMedicalReportResponse(emptyParsedLabValues(),
                     List.of("AI parser unavailable; report stored without extracted labs"));
         }
+    }
+
+    public NutrientAnalyzeResponse analyzeNutrients(String foodDescription, String region, String cuisineStyle, String dietary) {
+        try {
+            NutrientAnalyzeRequest request = new NutrientAnalyzeRequest(foodDescription, region, cuisineStyle, dietary);
+            NutrientAnalyzeResponse response = restTemplate.postForObject(
+                aiBaseUrl + "/food/analyze-nutrients",
+                request,
+                NutrientAnalyzeResponse.class
+            );
+            return response != null ? response : emptyNutrientResponse();
+        } catch (RestClientException ex) {
+            return emptyNutrientResponse();
+        }
+    }
+
+    public NutrientRecommendationResponse getNutrientRecommendations(
+            List<Map<String, Object>> deficiencyProfile,
+            String foodHistorySummary,
+            Map<String, Object> userContext) {
+        try {
+            NutrientRecommendationRequest request = new NutrientRecommendationRequest(deficiencyProfile, foodHistorySummary, userContext);
+            NutrientRecommendationResponse response = restTemplate.postForObject(
+                aiBaseUrl + "/nutrient/recommendations",
+                request,
+                NutrientRecommendationResponse.class
+            );
+            return response != null ? response : emptyRecommendationResponse();
+        } catch (RestClientException ex) {
+            return emptyRecommendationResponse();
+        }
+    }
+
+    private NutrientAnalyzeResponse emptyNutrientResponse() {
+        return new NutrientAnalyzeResponse(Collections.emptyList(), Collections.emptyMap(), null, "AI analysis unavailable");
+    }
+
+    private NutrientRecommendationResponse emptyRecommendationResponse() {
+        return new NutrientRecommendationResponse(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
     }
 
     private AiHealthResponse defaultInsights() {

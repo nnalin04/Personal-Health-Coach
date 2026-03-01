@@ -28,6 +28,9 @@ public class UserService {
         if (request.goal() != null) user.setGoal(request.goal());
         if (request.dietType() != null) user.setDietType(request.dietType());
         if (request.medicalFlags() != null) user.setMedicalFlags(request.medicalFlags());
+        if (request.region() != null) user.setRegion(request.region());
+        if (request.cuisineStyle() != null) user.setCuisineStyle(request.cuisineStyle());
+        if (request.dietaryRestrictions() != null) user.setDietaryRestrictions(request.dietaryRestrictions());
         return userRepository.save(user);
     }
 }

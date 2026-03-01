@@ -11,6 +11,9 @@ public record UpdateProfileRequest(
         @Positive Double height,
         @Size(max = 120) String goal,
         @Size(max = 60) String dietType,
-        String medicalFlags
+        String medicalFlags,
+        @Size(max = 255) String region,
+        @Size(max = 100) String cuisineStyle,
+        String dietaryRestrictions
 ) {
 }
