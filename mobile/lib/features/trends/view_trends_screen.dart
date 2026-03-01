@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../auth/auth_provider.dart';
@@ -143,7 +144,7 @@ class _ViewTrendsScreenState extends ConsumerState<ViewTrendsScreen> {
                           LineChartData(
                             lineTouchData: LineTouchData(
                               touchTooltipData: LineTouchTooltipData(
-                                tooltipBgColor: const Color(0xFF111827),
+                                getTooltipColor: (_) => const Color(0xFF111827),
                                 getTooltipItems: (touchedSpots) {
                                   return touchedSpots.map((spot) {
                                     final isWeight = spot.barIndex == 0;

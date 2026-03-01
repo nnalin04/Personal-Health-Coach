@@ -66,5 +66,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Personal Health Coach needs camera access to capture health photos and medical documents for analysis.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Personal Health Coach needs microphone access for voice input in the health chat assistant.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Personal Health Coach needs photo library access to upload medical reports and wellness images.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Personal Health Coach needs local network access to connect to your health data servers.</string>
 </dict>
 </plist>
