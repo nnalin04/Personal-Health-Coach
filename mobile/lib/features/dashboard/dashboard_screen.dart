@@ -8,6 +8,7 @@ import '../auth/auth_provider.dart';
 import '../body_metrics/add_body_metrics_screen.dart';
 import '../food/add_food_screen.dart';
 import '../medical/upload_medical_report_screen.dart';
+import '../nutrient_dashboard/nutrient_dashboard_screen.dart';
 import '../steps/add_steps_screen.dart';
 import '../workout/add_workout_screen.dart';
 
@@ -166,8 +167,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+
+            // Nutrient Intelligence quick-access banner
+            _NutrientBanner(onTap: () => _open(const NutrientDashboardScreen())),
             const SizedBox(height: 32),
-            
+
             _SectionHeader(
               title: 'Daily Activity',
               trailing: TextButton(
@@ -460,6 +465,62 @@ class _ActivityProgressCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NutrientBanner extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _NutrientBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.teal.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.teal.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.science_outlined, color: Colors.teal, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Micronutrient Tracker',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Weekly vitamin & mineral heatmap',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.teal),
+          ],
+        ),
       ),
     );
   }
