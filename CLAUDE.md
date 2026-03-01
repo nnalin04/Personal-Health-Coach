@@ -66,15 +66,27 @@ A private, cross-platform health monitoring system with AI-driven insights. User
 - Backend URL is runtime-configurable via Profile Settings → Connection
 
 ## Environment
-- Local: `docker-compose up --build -d` → backend :8080, AI service :8000
+- Local: `docker compose --env-file env.dev up -d --build --wait` → backend :8080, AI service :8000
 - Env vars template: `env.dev` (copy and fill `JWT_SECRET`, `POSTGRES_PASSWORD`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`)
 - Android emulator default URL: `http://10.0.2.2:8080/api`
 
+## Dev Loop (local Docker — use this for all feature development)
+```
+1. Make code changes
+2. docker compose --env-file env.dev up -d --build --wait
+3. bash scripts/run_dev_tests.sh    ← GO/NO-GO across 4 layers (~60 tests)
+4. Fix failures → repeat from step 2
+5. When green: commit + push → UAT (run e2e_prod_test.py against GCP)
+```
+Override backend URL: `API_BASE_URL=http://localhost:8080/api bash scripts/run_dev_tests.sh`
+
 ## Testing
-- Backend: `cd backend && mvn test`
-- AI Service: `cd ai-service && python3 -m pytest`
+- **One command (local Docker):** `bash scripts/run_dev_tests.sh`
+- Backend unit: `cd backend && mvn test`
+- AI service offline: `cd ai-service && python3 -m pytest tests/ -v`
+- E2E API (needs Docker): `cd tests && python3 -m pytest api/ -v`
 - Mobile: `cd mobile && flutter test`
-- E2E: `python3 e2e_verify.py`
+- E2E Prod (UAT/GCP): `python3 e2e_prod_test.py`
 
 ## Custom Commands
 See `.claude/commands/` for available slash commands:

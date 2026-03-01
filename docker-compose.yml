@@ -28,8 +28,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       APP_ENV: docker
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     healthcheck:
       test:
         [
