@@ -1,3 +1,8 @@
+from app.logging_config import setup_logging
+
+# Configure JSON logging before anything else imports logging
+setup_logging()
+
 from fastapi import FastAPI
 from app.routers.health_router import router as health_router
 from app.routers.nutrient_router import router as nutrient_router

@@ -1,0 +1,171 @@
+name: CD — Build, Push & Deploy
+
+# Triggers on version tags: v1.0.0, v1.2.3, etc.
+# Create a release: bash scripts/create_release.sh 1.2.3
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  GCP_PROJECT: my-project-poc-478915
+  REGISTRY: gcr.io
+  IMAGE_BACKEND: gcr.io/my-project-poc-478915/health-coach-backend
+  IMAGE_AI: gcr.io/my-project-poc-478915/health-coach-ai
+  VM_HOST: 34.45.115.228
+  VM_USER: ubuntu
+
+# ── Required GitHub Secrets ─────────────────────────────────────────────────
+# GCP_SA_KEY          — GCP service account JSON with roles/artifactregistry.writer
+# VM_SSH_KEY          — Private SSH key for ubuntu@34.45.115.228
+# KEYSTORE_BASE64     — Base64-encoded release.keystore for Flutter APK signing
+# KEY_ALIAS           — Keystore key alias
+# KEY_PASSWORD        — Key password
+# STORE_PASSWORD      — Keystore password
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ── 1. Build Docker images and push to GCR ──────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images to GCR
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version tag
+        id: meta
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and push backend image
+        run: |
+          docker build -t $IMAGE_BACKEND:${{ steps.meta.outputs.tag }} \
+                       -t $IMAGE_BACKEND:latest \
+                       ./backend
+          docker push $IMAGE_BACKEND:${{ steps.meta.outputs.tag }}
+          docker push $IMAGE_BACKEND:latest
+
+      - name: Build and push AI service image
+        run: |
+          docker build -t $IMAGE_AI:${{ steps.meta.outputs.tag }} \
+                       -t $IMAGE_AI:latest \
+                       ./ai-service
+          docker push $IMAGE_AI:${{ steps.meta.outputs.tag }}
+          docker push $IMAGE_AI:latest
+
+  # ── 2. Deploy to GCP VM ──────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to GCP VM
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.VM_HOST }}
+          username: ${{ env.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/health-coach
+
+            # Authenticate Docker to GCR on VM
+            gcloud auth configure-docker gcr.io --quiet
+
+            # Pull latest images
+            docker pull ${{ env.IMAGE_BACKEND }}:latest
+            docker pull ${{ env.IMAGE_AI }}:latest
+
+            # Restart services with new images
+            docker compose -f docker-compose.prod.yml up -d --no-build
+
+            # Verify health (wait up to 60s for backend to start)
+            echo "Waiting for backend to become healthy..."
+            for i in $(seq 1 12); do
+              STATUS=$(curl -sf http://localhost:8080/actuator/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+              if [[ "$STATUS" == "UP" ]]; then
+                echo "Backend healthy after ${i}x5s wait."
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Backend did not become healthy in time — check logs!"
+            docker compose -f docker-compose.prod.yml logs --tail=30 springboot-app
+            exit 1
+
+  # ── 3. Build signed APK and publish GitHub Release ───────────────────────────
+  release-apk:
+    name: Build Signed APK & Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17 (required for Flutter Gradle build)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          cache: true
+
+      - name: Restore signing keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > mobile/android/app/release.keystore
+
+      - name: Build signed release APK
+        working-directory: mobile
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_FILE: release.keystore
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: flutter build apk --release
+
+      - name: Generate release notes from git log
+        id: notes
+        run: |
+          PREV_TAG=$(git describe --abbrev=0 --tags HEAD^ 2>/dev/null || echo "")
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES=$(git log --oneline "$PREV_TAG"..HEAD --no-merges)
+          else
+            NOTES=$(git log --oneline -20 --no-merges)
+          fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }}"
+          body: |
+            ## What's Changed
+            ${{ steps.notes.outputs.notes }}
+
+            ## Install
+            Download `app-release.apk` below and install on Android (enable "Install from unknown sources").
+          files: mobile/build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: false

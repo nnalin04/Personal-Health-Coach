@@ -53,3 +53,17 @@ def test_get_profile_without_token_returns_401(base_url: str) -> None:
     """GET /users/me without Authorization must return 401 or 403."""
     r = requests.get(f"{base_url}/users/me")
     assert r.status_code in (401, 403), f"Expected 401/403, got {r.status_code}"
+
+
+@pytest.mark.crud
+def test_export_data_returns_expected_sections(
+    base_url: str, auth_headers: dict
+) -> None:
+    """GET /users/me/export must return all top-level data sections."""
+    r = requests.get(f"{base_url}/users/me/export", headers=auth_headers)
+    assert r.status_code == 200, f"GET /users/me/export failed: {r.text}"
+    data = r.json()
+    for section in ("profile", "exportedAt", "workoutLogs", "foodLogs",
+                    "bodyMetrics", "stepsLogs", "medicalReports", "healthGoals", "nutrientLogs"):
+        assert section in data, f"Missing section in export: {section}"
+    assert data["profile"]["email"] is not None
