@@ -19,6 +19,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# ── Java 17+ (required for Spring Boot 3) ─────────────────
+# Use macOS java_home if JAVA_HOME is unset or points to < 17
+_java_home_min17=$(/usr/libexec/java_home -v 17+ 2>/dev/null || true)
+if [[ -n "$_java_home_min17" ]]; then
+    export JAVA_HOME="$_java_home_min17"
+fi
+
 # Colour helpers
 GREEN="\033[1;32m"; RED="\033[1;31m"; YELLOW="\033[1;33m"
 BLUE="\033[1;34m"; RESET="\033[0m"; BOLD="\033[1m"
@@ -74,7 +81,7 @@ run_layer "AI Service Tests (pytest + TestClient)" \
     bash -c "cd '$ROOT/ai-service' && python3 -m pytest tests/ -v --tb=short 2>&1"
 
 # ── 5. Backend E2E API tests ───────────────────────────────
-pip install -q -r "$ROOT/tests/requirements.txt" 2>/dev/null
+python3 -m pip install -q -r "$ROOT/tests/requirements.txt" 2>/dev/null
 run_layer "Backend E2E API Tests (all 33 endpoints)" \
     python3 -m pytest "$ROOT/tests/api/" -v --tb=short \
         --rootdir="$ROOT/tests" \

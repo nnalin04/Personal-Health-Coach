@@ -1,5 +1,6 @@
 package com.healthcoach.goals;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.healthcoach.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDate;
@@ -11,6 +12,7 @@ public class HealthGoal {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

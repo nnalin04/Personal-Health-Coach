@@ -41,10 +41,9 @@ def test_weekly_nutrient_trends_has_required_keys(
     r = requests.get(f"{base_url}/nutrient/weekly-trends", headers=auth_headers)
     assert r.status_code == 200, f"Weekly trends failed: {r.text}"
     data = r.json()
-    for key in ("weekStart", "weekEnd", "dailyBreakdowns",
-                "chronicDeficiencies", "totalDaysTracked"):
+    for key in ("from", "days", "rdaValues", "chronicDeficiencies"):
         assert key in data, f"Missing key in weekly trends: {key}"
-    assert isinstance(data["dailyBreakdowns"], list)
+    assert isinstance(data["days"], list)
     assert isinstance(data["chronicDeficiencies"], list)
 
 

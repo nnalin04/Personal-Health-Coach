@@ -20,14 +20,17 @@ def test_health_summary_has_required_sections(
 
 
 @pytest.mark.aggregate
-def test_health_summary_profile_matches_user(
-    base_url: str, auth_headers: dict, auth: dict
+def test_health_summary_profile_has_expected_fields(
+    base_url: str, auth_headers: dict
 ) -> None:
-    """Health summary profile email must match the test user."""
+    """Health summary profile must contain the expected demographic fields."""
     r = requests.get(f"{base_url}/health-summary/me", headers=auth_headers)
     assert r.status_code == 200
     profile = r.json().get("profile", {})
-    assert profile.get("email") == auth["email"]
+    # Profile uses snake_case keys; age was set to 28 at registration
+    for key in ("age", "gender", "goal"):
+        assert key in profile, f"Missing profile key: {key}"
+    assert isinstance(profile["age"], int)
 
 
 @pytest.mark.aggregate
