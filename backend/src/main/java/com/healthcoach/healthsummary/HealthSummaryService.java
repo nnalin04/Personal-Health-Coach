@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -46,6 +47,7 @@ public class HealthSummaryService {
         this.labValuesRepository = labValuesRepository;
     }
 
+    @Cacheable(value = "healthSummary", key = "#userId")
     public Map<String, Object> buildSummary(Long userId) {
         User user = userService.getById(userId);
         LocalDate now = LocalDate.now();

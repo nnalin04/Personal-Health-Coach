@@ -6,7 +6,10 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "health_goals")
+@Table(name = "health_goals", indexes = {
+        @Index(name = "idx_health_goals_user_id", columnList = "user_id"),
+        @Index(name = "idx_health_goals_user_completed", columnList = "user_id,completed")
+})
 public class HealthGoal {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -38,9 +38,8 @@ public class FoodService {
     }
 
     public List<FoodLog> getByUser(Long userId, LocalDate from, LocalDate to) {
-        if (from != null && to != null) {
-            return foodLogRepository.findByUserIdAndDateBetween(userId, from, to);
-        }
-        return foodLogRepository.findByUserIdOrderByDateDesc(userId);
+        LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
+        LocalDate end = to != null ? to : LocalDate.now();
+        return foodLogRepository.findByUserIdAndDateBetween(userId, start, end);
     }
 }

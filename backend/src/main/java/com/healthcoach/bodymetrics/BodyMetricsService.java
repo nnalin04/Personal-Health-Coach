@@ -31,9 +31,8 @@ public class BodyMetricsService {
     }
 
     public List<BodyMetrics> getByUser(Long userId, LocalDate from, LocalDate to) {
-        if (from != null && to != null) {
-            return bodyMetricsRepository.findByUserIdAndDateBetweenOrderByDateAsc(userId, from, to);
-        }
-        return bodyMetricsRepository.findByUserIdOrderByDateDesc(userId);
+        LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
+        LocalDate end = to != null ? to : LocalDate.now();
+        return bodyMetricsRepository.findByUserIdAndDateBetweenOrderByDateAsc(userId, start, end);
     }
 }

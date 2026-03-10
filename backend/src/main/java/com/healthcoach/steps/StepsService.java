@@ -28,9 +28,8 @@ public class StepsService {
     }
 
     public List<StepsLog> getByUser(Long userId, LocalDate from, LocalDate to) {
-        if (from != null && to != null) {
-            return stepsLogRepository.findByUserIdAndDateBetween(userId, from, to);
-        }
-        return stepsLogRepository.findByUserIdOrderByDateDesc(userId);
+        LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
+        LocalDate end = to != null ? to : LocalDate.now();
+        return stepsLogRepository.findByUserIdAndDateBetween(userId, start, end);
     }
 }

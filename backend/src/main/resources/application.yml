@@ -1,11 +1,22 @@
 server:
   port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/health_coach}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 900000
+      pool-name: HealthCoachPool
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,6 +27,13 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+  cache:
+    type: caffeine
+    caffeine:
+      # healthSummary: 5-min TTL, up to 10k users in memory (~10MB)
+      # healthSummaryAi: 30-min TTL for AI insights (expensive Gemini call)
+      spec: maximumSize=10000,expireAfterWrite=300s
+    cache-names: healthSummary,healthSummaryAi
   servlet:
     multipart:
       max-file-size: 10MB

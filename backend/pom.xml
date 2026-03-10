@@ -93,6 +93,16 @@
             <version>7.6.0</version>
         </dependency>
 
+        <!-- In-memory caching (Caffeine) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- Structured JSON logging (logstash-logback-encoder) -->
         <dependency>
             <groupId>net.logstash.logback</groupId>

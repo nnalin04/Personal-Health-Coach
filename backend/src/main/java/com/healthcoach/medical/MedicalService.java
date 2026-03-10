@@ -14,8 +14,10 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,13 +97,17 @@ public class MedicalService {
 
     public List<MedicalReportResponse> listReports(Long userId) {
         List<MedicalReport> reports = medicalReportRepository.findByUserIdOrderByReportDateDesc(userId);
-        return reports.stream().map(report -> {
-            List<LabValues> labs = labValuesRepository.findByReportUserIdOrderByReportReportDateAsc(userId)
-                    .stream()
-                    .filter(l -> l.getReport().getId().equals(report.getId()))
-                    .toList();
-            return MedicalReportResponse.from(report, labs, List.of());
-        }).toList();
+        // Load all lab values in one query, then group in memory — avoids N+1
+        Map<Long, List<LabValues>> labsByReport = labValuesRepository
+                .findByReportUserIdOrderByReportReportDateAsc(userId)
+                .stream()
+                .collect(Collectors.groupingBy(l -> l.getReport().getId()));
+        return reports.stream()
+                .map(report -> MedicalReportResponse.from(
+                        report,
+                        labsByReport.getOrDefault(report.getId(), List.of()),
+                        List.of()))
+                .toList();
     }
 
     private String saveFile(Long userId, MultipartFile file) {
@@ -136,9 +142,7 @@ public class MedicalService {
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 0 * * *") // Every night at midnight
     public void cleanupOldReports() {
         LocalDate threshold = LocalDate.now().minusDays(365); // Keep for 1 year
-        List<MedicalReport> oldReports = medicalReportRepository.findAll().stream()
-                .filter(r -> r.getReportDate().isBefore(threshold))
-                .toList();
+        List<MedicalReport> oldReports = medicalReportRepository.findByReportDateBefore(threshold);
 
         for (MedicalReport report : oldReports) {
             try {
