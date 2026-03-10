@@ -10,19 +10,37 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 public class RateLimitingFilter extends OncePerRequestFilter {
 
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    // Standard endpoints: 20 req/min per IP
+    private static final int STANDARD_CAPACITY = 20;
+    // AI-heavy endpoints (Gemini calls): 5 req/min per IP — protects API budget
+    private static final int AI_CAPACITY = 5;
 
-    private Bucket createNewBucket() {
-        Bandwidth limit = Bandwidth.classic(20, Refill.greedy(20, Duration.ofMinutes(1)));
-        return Bucket.builder()
-                .addLimit(limit)
-                .build();
+    // Paths that invoke Gemini and are expensive
+    private static final Set<String> AI_PATHS = Set.of(
+            "/api/health-summary/me/ai-insights",
+            "/api/nutrient/recommendations",
+            "/api/extract-metrics"
+    );
+
+    // Standard rate-limited paths
+    private static final Set<String> STANDARD_PREFIXES = Set.of(
+            "/api/auth",
+            "/api/medical/reports"
+    );
+
+    private final Map<String, Bucket> standardBuckets = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> aiBuckets = new ConcurrentHashMap<>();
+
+    private Bucket createBucket(int capacity) {
+        Bandwidth limit = Bandwidth.classic(capacity, Refill.greedy(capacity, Duration.ofMinutes(1)));
+        return Bucket.builder().addLimit(limit).build();
     }
 
     @Override
@@ -30,28 +48,44 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String path = request.getRequestURI();
+        String clientIp = getClientIP(request);
 
-        // Only rate limit auth and medical uploads for now
-        if (path.startsWith("/api/auth") || path.startsWith("/api/medical/reports")) {
-            String clientIp = getClientIP(request);
-            Bucket bucket = buckets.computeIfAbsent(clientIp, k -> createNewBucket());
-
-            if (bucket.tryConsume(1)) {
-                filterChain.doFilter(request, response);
-            } else {
+        if (AI_PATHS.contains(path)) {
+            Bucket bucket = aiBuckets.computeIfAbsent(clientIp, k -> createBucket(AI_CAPACITY));
+            if (!bucket.tryConsume(1)) {
+                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+                response.getWriter().write("Too many AI requests. Please wait before retrying.");
+                return;
+            }
+        } else if (STANDARD_PREFIXES.stream().anyMatch(path::startsWith)) {
+            Bucket bucket = standardBuckets.computeIfAbsent(clientIp, k -> createBucket(STANDARD_CAPACITY));
+            if (!bucket.tryConsume(1)) {
                 response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                 response.getWriter().write("Too many requests. Please try again later.");
+                return;
             }
-        } else {
-            filterChain.doFilter(request, response);
         }
+
+        filterChain.doFilter(request, response);
     }
 
+    /**
+     * Resolve client IP. Trust X-Forwarded-For only when the direct connection comes
+     * from a known internal proxy (nginx container on the Docker bridge network).
+     * If the header is absent or the request arrives directly, use remoteAddr.
+     */
     private String getClientIP(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null) {
-            return request.getRemoteAddr();
+        String remoteAddr = request.getRemoteAddr();
+        // Only trust X-Forwarded-For when the request arrives from localhost or Docker bridge
+        boolean fromTrustedProxy = remoteAddr.equals("127.0.0.1")
+                || remoteAddr.equals("::1")
+                || remoteAddr.startsWith("172.");   // Docker default bridge subnet
+        if (fromTrustedProxy) {
+            String xfHeader = request.getHeader("X-Forwarded-For");
+            if (xfHeader != null && !xfHeader.isBlank()) {
+                return xfHeader.split(",")[0].trim();
+            }
         }
-        return xfHeader.split(",")[0];
+        return remoteAddr;
     }
 }

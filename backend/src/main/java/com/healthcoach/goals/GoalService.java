@@ -1,6 +1,7 @@
 package com.healthcoach.goals;
 
 import com.healthcoach.common.ResourceNotFoundException;
+import com.healthcoach.goals.dto.CreateGoalRequest;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserService;
 import java.util.List;
@@ -22,9 +23,13 @@ public class GoalService {
     }
 
     @Transactional
-    public HealthGoal createGoal(Long userId, HealthGoal goal) {
+    public HealthGoal createGoal(Long userId, CreateGoalRequest request) {
         User user = userService.getById(userId);
+        HealthGoal goal = new HealthGoal();
         goal.setUser(user);
+        goal.setGoalType(request.goalType());
+        goal.setTargetValue(request.targetValue());
+        goal.setTargetDate(request.targetDate());
         return goalRepository.save(goal);
     }
 

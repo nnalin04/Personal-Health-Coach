@@ -1,6 +1,8 @@
 package com.healthcoach.goals;
 
+import com.healthcoach.goals.dto.CreateGoalRequest;
 import com.healthcoach.security.UserPrincipal;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -21,8 +23,9 @@ public class GoalController {
     }
 
     @PostMapping
-    public HealthGoal createGoal(@AuthenticationPrincipal UserPrincipal userPrincipal, @RequestBody HealthGoal goal) {
-        return goalService.createGoal(userPrincipal.getId(), goal);
+    public HealthGoal createGoal(@AuthenticationPrincipal UserPrincipal userPrincipal,
+                                 @Valid @RequestBody CreateGoalRequest request) {
+        return goalService.createGoal(userPrincipal.getId(), request);
     }
 
     @DeleteMapping("/{id}")

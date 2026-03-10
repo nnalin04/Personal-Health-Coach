@@ -1,4 +1,9 @@
 package com.healthcoach.aiclient.dto;
 
-public record ExtractMetricsRequest(String text) {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record ExtractMetricsRequest(
+        @NotBlank @Size(max = 10000) String text
+) {
 }

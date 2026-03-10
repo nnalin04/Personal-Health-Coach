@@ -10,6 +10,7 @@
 env.dev
 env.uat
 env.prod
+env_vars
 .keytool
 
 # Python virtual environments

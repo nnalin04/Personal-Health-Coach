@@ -14,6 +14,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -42,10 +43,17 @@ public class MedicalService {
         this.uploadDir = uploadDir;
     }
 
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+            "application/pdf", "image/png", "image/jpeg", "image/webp");
+
     @Transactional
     public MedicalReportResponse uploadAndParse(Long userId, MultipartFile file, LocalDate reportDate) {
         if (file.isEmpty()) {
             throw new BadRequestException("Medical report file is empty");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_MIME_TYPES.contains(contentType)) {
+            throw new BadRequestException("Invalid file type. Allowed: PDF, PNG, JPEG, WebP");
         }
 
         User user = userService.getById(userId);
