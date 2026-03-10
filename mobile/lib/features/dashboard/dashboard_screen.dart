@@ -73,12 +73,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final nutrition = _summary?['nutrition_summary'] as Map<String, dynamic>?;
     final training = _summary?['training_summary'] as Map<String, dynamic>?;
+    final weightTrend7d = (_summary?['weight_trend'] as Map<String, dynamic>?)?['last_7_days'] as Map<String, dynamic>?;
     final riskFlags = List<String>.from(_summary?['risk_flags'] ?? const []);
 
     final stepAvg = _num(training?['step_average']?['last_7_days']).round();
     final calories = _num(nutrition?['last_7_days']?['avg_calories']).round();
     final workouts = _num(training?['workout_frequency']?['last_7_days']);
     final score = _computeScore(riskFlags, stepAvg, workouts);
+
+    final userEmail = ref.watch(authControllerProvider).user?['email'] as String? ?? '';
+    final displayName = userEmail.contains('@') ? userEmail.split('@').first : userEmail;
 
     final theme = Theme.of(context);
 
@@ -96,8 +100,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundImage: const NetworkImage('https://i.pravatar.cc/150?u=alex'),
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+                  child: Text(
+                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -105,7 +116,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Alex Johnson',
+                        displayName.isNotEmpty ? displayName : 'Health Coach',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
@@ -210,7 +221,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 32),
             _SectionHeader(title: 'Recent Trends', trailing: const Text('Weight (7 Days)')),
             const SizedBox(height: 16),
-            _HighFidelityTrendsCard(),
+            _WeightTrendCard(trend: weightTrend7d),
           ],
         ),
       ),
@@ -526,10 +537,33 @@ class _NutrientBanner extends StatelessWidget {
   }
 }
 
-class _HighFidelityTrendsCard extends StatelessWidget {
+class _WeightTrendCard extends StatelessWidget {
+  final Map<String, dynamic>? trend;
+
+  const _WeightTrendCard({required this.trend});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final start = trend?['start_weight'] as num?;
+    final end = trend?['end_weight'] as num?;
+    final change = trend?['change'] as num?;
+    final direction = trend?['direction'] as String? ?? 'unknown';
+
+    final hasData = start != null && end != null;
+    final isDown = direction == 'down';
+    final isUp = direction == 'up';
+    final trendColor = isDown
+        ? Colors.green
+        : isUp
+            ? Colors.orange
+            : theme.colorScheme.onSurfaceVariant;
+    final trendIcon = isDown
+        ? Icons.trending_down_rounded
+        : isUp
+            ? Icons.trending_up_rounded
+            : Icons.trending_flat_rounded;
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -537,44 +571,42 @@ class _HighFidelityTrendsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
       ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List.generate(7, (index) {
-              final heights = [0.8, 0.75, 0.78, 0.7, 0.65, 0.6, 0.58];
-              final days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-              final isToday = index == 6;
-              return Column(
-                children: [
-                  if (isToday)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: theme.colorScheme.primary, borderRadius: BorderRadius.circular(4)),
-                      child: const Text('72.4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 34,
-                    height: 80 * heights[index],
-                    decoration: BoxDecoration(
-                      color: isToday ? theme.colorScheme.primary : theme.colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: isToday ? null : Border(top: BorderSide(color: theme.colorScheme.primary, width: 2)),
-                    ),
+      child: hasData
+          ? Row(
+              children: [
+                Icon(trendIcon, color: trendColor, size: 40),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${end!.toStringAsFixed(1)} kg',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        change != null
+                            ? '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)} kg vs 7 days ago (${start!.toStringAsFixed(1)} kg)'
+                            : 'vs ${start!.toStringAsFixed(1)} kg 7 days ago',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    days[index],
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              );
-            }),
-          ),
-        ],
-      ),
+                ),
+              ],
+            )
+          : Text(
+              'No weight data recorded yet.\nLog body metrics to see your trend.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
     );
   }
 }

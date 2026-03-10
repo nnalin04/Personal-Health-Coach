@@ -55,7 +55,9 @@ public class HealthSummaryService {
         List<WorkoutLog> workoutLogs = workoutLogRepository.findByUserIdAndDateBetween(userId, start90, now);
         List<BodyMetrics> bodyMetrics = bodyMetricsRepository.findByUserIdAndDateBetweenOrderByDateAsc(userId, start90, now);
         List<StepsLog> stepsLogs = stepsLogRepository.findByUserIdAndDateBetween(userId, start90, now);
-        List<LabValues> labs = labValuesRepository.findByReportUserIdOrderByReportReportDateAsc(userId);
+        LocalDate start2y = now.minusYears(2);
+        List<LabValues> labs = labValuesRepository
+                .findByReportUserIdAndReportReportDateAfterOrderByReportReportDateAsc(userId, start2y);
 
         Map<String, Object> profile = buildProfile(user, bodyMetrics);
         Map<String, Object> nutrition = buildNutritionSummary(foodLogs, now);

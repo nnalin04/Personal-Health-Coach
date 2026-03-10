@@ -1,7 +1,11 @@
 import json
+import logging
 from datetime import date
 from app.ai.gemini_client import GeminiClient
 from app.schemas.metrics import ExtractMetricsResponse, ExtractedMetric
+
+logger = logging.getLogger(__name__)
+
 
 class MetricExtractionService:
     def __init__(self) -> None:
@@ -33,6 +37,7 @@ class MetricExtractionService:
             ]
             return ExtractMetricsResponse(metrics=metrics, raw_text=text)
         except Exception as e:
+            logger.exception("Gemini metric extraction failed — using regex fallback")
             # Fallback for simple weight extraction if LLM fails
             import re
             weight_match = re.search(r"(weight|weigh)\s*(?:is|at)?\s*(\d+(?:\.\d+)?)\s*(kg|kilos|lbs)?", text, re.I)

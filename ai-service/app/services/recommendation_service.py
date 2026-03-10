@@ -1,6 +1,9 @@
 import json
+import logging
 from app.ai.gemini_client import GeminiClient
 from app.schemas.health import AnalyzeHealthResponse
+
+logger = logging.getLogger(__name__)
 
 
 class RecommendationService:
@@ -11,6 +14,7 @@ class RecommendationService:
         try:
             return self._gemini_analysis(summary)
         except Exception:
+            logger.exception("Gemini health analysis failed — using fallback")
             return self._fallback_analysis(summary)
 
     def _gemini_analysis(self, summary: dict) -> AnalyzeHealthResponse:

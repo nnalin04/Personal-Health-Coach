@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 from app.ai.gemini_client import GeminiClient
 from app.schemas.medical import ParsedLabValues, ParseMedicalReportResponse
 from app.utils.text_extract import decode_base64_to_text
+
+logger = logging.getLogger(__name__)
 
 
 class ReportParserService:
@@ -36,6 +39,7 @@ class ReportParserService:
             notes.append("Lab values extracted with LLM")
             return ParseMedicalReportResponse(labValues=parsed, extractionNotes=notes)
         except Exception:
+            logger.exception("Gemini medical report parsing failed — using regex fallback")
             parsed = self._regex_parse(report_text)
             notes.append("Fallback parser used (regex)")
             return ParseMedicalReportResponse(labValues=parsed, extractionNotes=notes)
