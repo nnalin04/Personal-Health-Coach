@@ -186,6 +186,12 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 - `/performance-analysis [mobile|backend|ai-service|full]` — Bottleneck detection across Flutter/Riverpod, Spring Boot/JPA, FastAPI/Gemini. Produces ranked optimization report with quick-win table.
 - `/api-docs [yaml|swagger-ui|both]` — Generate OpenAPI 3.0 spec (`docs/openapi.yaml`) by reading controllers + DTOs. Optionally adds springdoc live Swagger UI at `/swagger-ui.html` (disabled in prod).
 
+### Agent Memory
+- `/memory store <type> <tags> "<content>"` — Persist a typed insight/decision/pattern/error across sessions into `.claude/memory/agent-memory.json`. Types: `insight`, `decision`, `pattern`, `error`, `observation`.
+- `/memory query [type] [tag]` — Retrieve non-expired entries filtered by type/tag. Agents should run this at task start.
+- `/memory clean` — Remove entries past their 30-day TTL.
+- `/memory export` — Print full memory store as JSON.
+
 ### Security
 - `/security-audit [full|backend|mobile|ai-service|auth|deps]` — OWASP audit via security-engineer.
 
@@ -206,6 +212,21 @@ Hooks run automatically before/after tool calls — no configuration needed beyo
 | Hook | File | Trigger | What it does |
 |------|------|---------|--------------|
 | PreToolUse | `pre-tool-use.sh` | Every `Bash` call | Adds `-i` to bare `rm`, expands `ll`/`la` aliases, warns on writes to system paths |
+
+## Ruflo / claude-flow — Decision Record
+Reviewed `github.com/ruvnet/ruflo`. Extracted all useful concepts natively. **MCP server not used** because:
+- The npm-published package internals differ from the reviewed GitHub source (root `package.json` has only `semver`+`zod` as deps — no MCP SDK, unverifiable)
+- `terminal/execute` tool in the tool registry allows arbitrary shell execution — unsafe even with whitelisting (process itself runs with full filesystem access)
+- Supply-chain risk cannot be fully eliminated without a reproducible build
+
+**What was extracted natively (zero runtime dependency):**
+| Ruflo concept | Native replacement | Where |
+|--------------|-------------------|-------|
+| `memory/store` + `memory/query` | `/memory` skill + `agent-memory.json` | `.claude/skills/memory/` |
+| Performance profiling | `/performance-analysis` skill | `.claude/skills/performance-analysis/` |
+| API documentation | `/api-docs` skill | `.claude/skills/api-docs/` |
+| PreToolUse hook patterns | `pre-tool-use.sh` | `.claude/hooks/` |
+| Swarm agent coordination | Claude Code's native `Agent` tool | Already built-in (92% architectural match) |
 
 ## Agents (`.claude/agents/`)
 Only 4 agents exist — each represents a genuine task conflict, not just domain expertise.
