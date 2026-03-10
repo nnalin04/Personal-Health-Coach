@@ -182,6 +182,10 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 ### UI & Design
 - `/ui-review [screen or feature]` — Material Design 3 + accessibility audit via `reviewer` (UX/Mobile domains).
 
+### Performance & Documentation
+- `/performance-analysis [mobile|backend|ai-service|full]` — Bottleneck detection across Flutter/Riverpod, Spring Boot/JPA, FastAPI/Gemini. Produces ranked optimization report with quick-win table.
+- `/api-docs [yaml|swagger-ui|both]` — Generate OpenAPI 3.0 spec (`docs/openapi.yaml`) by reading controllers + DTOs. Optionally adds springdoc live Swagger UI at `/swagger-ui.html` (disabled in prod).
+
 ### Security
 - `/security-audit [full|backend|mobile|ai-service|auth|deps]` — OWASP audit via security-engineer.
 
@@ -195,6 +199,13 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 - `/retrospective` — Process accumulated learnings, update agent/skill files system-wide
 - `/improve [name]` — Targeted improvement of one agent or skill using its learnings
 - `/split-skill [name]` — Split an oversized skill into router + focused sub-skills
+
+## Hooks (`.claude/hooks/`)
+Hooks run automatically before/after tool calls — no configuration needed beyond `settings.json`.
+
+| Hook | File | Trigger | What it does |
+|------|------|---------|--------------|
+| PreToolUse | `pre-tool-use.sh` | Every `Bash` call | Adds `-i` to bare `rm`, expands `ll`/`la` aliases, warns on writes to system paths |
 
 ## Agents (`.claude/agents/`)
 Only 4 agents exist — each represents a genuine task conflict, not just domain expertise.
