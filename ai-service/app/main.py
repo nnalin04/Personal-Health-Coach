@@ -3,6 +3,7 @@ from app.logging_config import setup_logging
 # Configure JSON logging before anything else imports logging
 setup_logging()
 
+import os
 import time
 import logging
 from collections import defaultdict
@@ -15,18 +16,20 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Personal Health AI Service", version="0.1.0")
 
-# Simple in-memory rate limiter: 10 Gemini requests per minute per caller IP
+# Simple in-memory rate limiter: 10 Gemini requests per minute per caller IP.
+# Disabled when GEMINI_API_KEY is absent (test / offline mode).
 _RATE_LIMIT = 10
 _WINDOW_SECONDS = 60
 _request_log: dict[str, list[float]] = defaultdict(list)
+_rate_limiting_enabled = bool(os.getenv("GEMINI_API_KEY", "").strip())
 
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Only rate-limit Gemini-backed endpoints
+    # Only rate-limit Gemini-backed endpoints in production (key present)
     gemini_paths = {"/analyze-health", "/parse-medical-report", "/extract-metrics",
                     "/food/analyze-nutrients", "/nutrient/recommendations"}
-    if request.url.path in gemini_paths:
+    if _rate_limiting_enabled and request.url.path in gemini_paths:
         client_ip = request.client.host if request.client else "unknown"
         now = time.monotonic()
         window_start = now - _WINDOW_SECONDS

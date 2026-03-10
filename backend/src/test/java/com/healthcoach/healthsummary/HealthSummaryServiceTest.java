@@ -65,7 +65,7 @@ class HealthSummaryServiceTest {
                 .thenReturn(Collections.emptyList());
         when(stepsLogRepository.findByUserIdAndDateBetween(anyLong(), any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(labValuesRepository.findByReportUserIdOrderByReportReportDateAsc(anyLong()))
+        when(labValuesRepository.findByReportUserIdAndReportReportDateAfterOrderByReportReportDateAsc(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
 
         Map<String, Object> summary = healthSummaryService.buildSummary(1L);
