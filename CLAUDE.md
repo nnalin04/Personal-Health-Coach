@@ -182,6 +182,10 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 ### UI & Design
 - `/ui-review [screen or feature]` — Material Design 3 + accessibility audit via `reviewer` (UX/Mobile domains).
 
+### Performance & Documentation
+- `/performance-analysis [mobile|backend|ai-service|full]` — Bottleneck detection across Flutter/Riverpod, Spring Boot/JPA, FastAPI/Gemini. Produces ranked optimization report.
+- `/api-docs [yaml|swagger-ui|both]` — Generate OpenAPI 3.0 spec (`docs/openapi.yaml`) from Spring Boot controllers. Optionally adds springdoc live Swagger UI at `/swagger-ui.html`.
+
 ### Security
 - `/security-audit [full|backend|mobile|ai-service|auth|deps]` — OWASP audit via security-engineer.
 
@@ -195,6 +199,27 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 - `/retrospective` — Process accumulated learnings, update agent/skill files system-wide
 - `/improve [name]` — Targeted improvement of one agent or skill using its learnings
 - `/split-skill [name]` — Split an oversized skill into router + focused sub-skills
+
+## Ruflo MCP Integration
+
+[Ruflo](https://github.com/ruvnet/ruflo) (aka `claude-flow`) is an enterprise AI orchestration platform. It runs as an MCP server and provides 215 additional tools for Claude Code sessions.
+
+**Setup** (already configured in `.claude/settings.json`):
+```json
+"mcpServers": {
+  "ruflo": { "command": "npx", "args": ["-y", "claude-flow@latest", "mcp", "start"] }
+}
+```
+
+**What it adds:**
+- `mcp__ruflo__*` tools — swarm coordination, vector memory (HNSW), performance profiling, neural patterns
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — enables parallel agent team spawning
+- Used by `/performance-analysis` for extended metrics when available
+
+**What was NOT brought in:** SvelteKit chat UI, MongoDB, WASM/Rust neural modules, Byzantine/Raft consensus
+(wrong tech stack or overkill for this project)
+
+**Requirement:** Node.js + npx must be installed. Skills degrade gracefully if ruflo is unavailable.
 
 ## Agents (`.claude/agents/`)
 Only 4 agents exist — each represents a genuine task conflict, not just domain expertise.
