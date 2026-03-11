@@ -54,3 +54,8 @@ reference/
 
 # E2E test scripts (may contain test credentials / generate QA accounts)
 e2e_prod_test.py
+
+# Local infrastructure & analysis docs (machine-specific, not for repo)
+worker-node-setup.md
+cost_and_pricing_analysis.md
+scaling_to_one_million.md

@@ -31,8 +31,11 @@ public class WorkoutService {
     }
 
     public List<WorkoutLog> getByUser(Long userId, LocalDate from, LocalDate to) {
+        if (from == null && to == null) {
+            return workoutLogRepository.findByUserIdOrderByDateDesc(userId);
+        }
         LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
-        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate end = to != null ? to : LocalDate.now().plusDays(1);
         return workoutLogRepository.findByUserIdAndDateBetween(userId, start, end);
     }
 }
