@@ -13,11 +13,17 @@
 #   API_BASE_URL   override backend URL (default: http://localhost:8080/api)
 #   AI_SERVICE_URL override AI service URL (default: http://localhost:8000)
 #   SKIP_BUILD     set to 1 to skip docker compose build (faster if code unchanged)
+#
+# Output:
+#   test-reports/e2e/report_<timestamp>.html  — E2E layer HTML report
+#   test-reports/ai/report_<timestamp>.html   — AI service HTML report
 # ============================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
 # ── Java 17+ (required for Spring Boot 3) ─────────────────
 # Use macOS java_home if JAVA_HOME is unset or points to < 17
@@ -32,6 +38,7 @@ BLUE="\033[1;34m"; RESET="\033[0m"; BOLD="\033[1m"
 
 PASS=0; FAIL=0
 RESULTS=()
+REPORT_LINKS=()
 
 run_layer() {
     local label="$1"; shift
@@ -77,15 +84,23 @@ run_layer "Backend Unit Tests (JUnit5)" \
     bash -c "cd '$ROOT/backend' && mvn test -q 2>&1"
 
 # ── 4. AI service offline tests ────────────────────────────
+mkdir -p "$ROOT/test-reports/ai"
+AI_REPORT="$ROOT/test-reports/ai/report_${TIMESTAMP}.html"
 run_layer "AI Service Tests (pytest + TestClient)" \
-    bash -c "cd '$ROOT/ai-service' && python3 -m pytest tests/ -v --tb=short 2>&1"
+    bash -c "cd '$ROOT/ai-service' && python3 -m pip install -q pytest-html && python3 -m pytest tests/ -v --tb=short --html='$AI_REPORT' --self-contained-html 2>&1"
+REPORT_LINKS+=("AI Service: $AI_REPORT")
 
 # ── 5. Backend E2E API tests ───────────────────────────────
 python3 -m pip install -q -r "$ROOT/tests/requirements.txt" 2>/dev/null
+mkdir -p "$ROOT/test-reports/e2e"
+E2E_REPORT="$ROOT/test-reports/e2e/report_${TIMESTAMP}.html"
 run_layer "Backend E2E API Tests (all 33 endpoints)" \
     python3 -m pytest "$ROOT/tests/api/" -v --tb=short \
         --rootdir="$ROOT/tests" \
-        -p no:randomly
+        -p no:randomly \
+        --html="$E2E_REPORT" \
+        --self-contained-html
+REPORT_LINKS+=("E2E API: $E2E_REPORT")
 
 # ── 6. Flutter unit tests ──────────────────────────────────
 run_layer "Flutter Unit Tests" \
@@ -96,6 +111,13 @@ echo -e "\n${BOLD}━━━━━━━━━━━━━━━━━━━━�
 for r in "${RESULTS[@]}"; do echo -e "  $r"; done
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "  ${BOLD}$PASS passed  $FAIL failed${RESET}"
+
+if [[ ${#REPORT_LINKS[@]} -gt 0 ]]; then
+    echo -e "\n${BOLD}HTML Reports:${RESET}"
+    for link in "${REPORT_LINKS[@]}"; do
+        echo -e "  ${BLUE}$link${RESET}"
+    done
+fi
 
 if [[ $FAIL -eq 0 ]]; then
     echo -e "\n  ${GREEN}${BOLD}✓  GO — all layers green. Safe to commit and push.${RESET}"
