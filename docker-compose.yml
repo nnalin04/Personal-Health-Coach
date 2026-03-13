@@ -26,7 +26,7 @@ services:
     container_name: fastapi-ai
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
       APP_ENV: docker
     ports:
       - "8000:8000"

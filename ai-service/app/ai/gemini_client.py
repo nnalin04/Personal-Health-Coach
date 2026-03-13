@@ -10,7 +10,7 @@ class GeminiClient:
                 "GEMINI_API_KEY environment variable is not set or is empty. "
                 "The AI service cannot start without a valid Gemini API key."
             )
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
         self.enabled = True
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(self.model_name)
