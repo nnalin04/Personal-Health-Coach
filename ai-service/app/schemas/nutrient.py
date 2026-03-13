@@ -47,6 +47,9 @@ class FoodAnalysisRequest(BaseModel):
 class FoodAnalysisResponse(BaseModel):
     foods: list[IdentifiedFood]
     nutrients: NutrientProfile
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fats_g: Optional[float] = None
     total_calories: Optional[float] = None
     confidence_note: Optional[str] = None
 

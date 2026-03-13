@@ -115,7 +115,8 @@ public class AiServiceClient {
     }
 
     private NutrientAnalyzeResponse emptyNutrientResponse() {
-        return new NutrientAnalyzeResponse(Collections.emptyList(), Collections.emptyMap(), null, "AI analysis unavailable");
+        return new NutrientAnalyzeResponse(Collections.emptyList(), Collections.emptyMap(),
+                null, null, null, null, "AI analysis unavailable");
     }
 
     private NutrientRecommendationResponse emptyRecommendationResponse() {

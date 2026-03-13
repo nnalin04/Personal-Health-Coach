@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.healthcoach.aiclient.AiServiceClient;
+import com.healthcoach.aiclient.dto.NutrientAnalyzeResponse;
 import com.healthcoach.nutrient.NutrientIntegrationService;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserService;
@@ -24,12 +26,13 @@ class FoodServiceTest {
     @Mock private FoodLogRepository foodLogRepository;
     @Mock private UserService userService;
     @Mock private NutrientIntegrationService nutrientIntegrationService;
+    @Mock private AiServiceClient aiServiceClient;
 
     private FoodService foodService;
 
     @BeforeEach
     void setUp() {
-        foodService = new FoodService(foodLogRepository, userService, nutrientIntegrationService);
+        foodService = new FoodService(foodLogRepository, userService, nutrientIntegrationService, aiServiceClient);
     }
 
     @Test
@@ -50,6 +53,33 @@ class FoodServiceTest {
         assertEquals("Chicken Rice", result.getFoodName());
         verify(foodLogRepository).save(any(FoodLog.class));
         verify(nutrientIntegrationService).analyzeAndSaveAsync(eq(saved), eq(user));
+        // Macros already provided — AI should NOT be called
+        verify(aiServiceClient, never()).analyzeNutrients(any(), any(), any(), any());
+    }
+
+    @Test
+    void create_ZeroMacros_AutoEstimatesViAI() {
+        User user = new User();
+        user.setId(1L);
+        when(userService.getById(1L)).thenReturn(user);
+
+        NutrientAnalyzeResponse estimate = new NutrientAnalyzeResponse(
+                null, null, 25.0, 80.0, 15.0, 560.0, "AI estimate");
+        when(aiServiceClient.analyzeNutrients(eq("Veg biryani"), any(), any(), any()))
+                .thenReturn(estimate);
+
+        FoodLog saved = new FoodLog();
+        saved.setFoodName("Veg biryani");
+        saved.setCalories(560.0);
+        when(foodLogRepository.save(any())).thenReturn(saved);
+
+        FoodLogRequest req = new FoodLogRequest("Lunch", "Veg biryani", 0.0, 0.0, 0.0, 0.0, LocalDate.now());
+        foodService.create(1L, req);
+
+        verify(aiServiceClient).analyzeNutrients(eq("Veg biryani"), any(), any(), any());
+        verify(foodLogRepository).save(argThat(log ->
+                log.getCalories() == 560.0 && log.getProtein() == 25.0
+        ));
     }
 
     @Test

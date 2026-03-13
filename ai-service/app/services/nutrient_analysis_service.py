@@ -6,7 +6,10 @@ from app.schemas.nutrient import (
 )
 
 FOOD_ANALYSIS_SYSTEM = """You are a certified nutrition expert AI.
-Analyze the provided food image and/or description to identify all food items and estimate their micronutrient content.
+Analyze the provided food image and/or description to identify all food items and estimate their
+macronutrient content (protein, carbohydrates, fats, calories) and micronutrient content (vitamins and minerals).
+Use your broad knowledge of food composition to provide realistic estimates even for common dishes described
+in natural language (e.g. "1 plate veg biryani", "90g peanuts", "2 eggs and dal").
 Return ONLY valid JSON in the exact format requested. Be precise and realistic with nutrient values.
 If you cannot determine a value reliably, return null for that field."""
 
@@ -36,6 +39,10 @@ Return JSON in this exact format:
   "foods": [
     {{"name": "food name", "portion_g": 150, "confidence": 0.9}}
   ],
+  "protein_g": 0,
+  "carbs_g": 0,
+  "fats_g": 0,
+  "total_calories": 0,
   "nutrients": {{
     "vitamins": {{
       "a_mcg": null, "b1_mg": null, "b2_mg": null, "b3_mg": null,
@@ -47,7 +54,6 @@ Return JSON in this exact format:
       "magnesium_mg": null, "potassium_mg": null, "selenium_mcg": null, "iodine_mcg": null
     }}
   }},
-  "total_calories": 0,
   "confidence_note": "brief note about analysis confidence"
 }}"""
 
@@ -69,6 +75,9 @@ Return JSON in this exact format:
             return FoodAnalysisResponse(
                 foods=foods,
                 nutrients=NutrientProfile(vitamins=vitamins, minerals=minerals),
+                protein_g=result.get("protein_g"),
+                carbs_g=result.get("carbs_g"),
+                fats_g=result.get("fats_g"),
                 total_calories=result.get("total_calories"),
                 confidence_note=result.get("confidence_note")
             )

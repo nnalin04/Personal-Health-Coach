@@ -119,10 +119,22 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen> {
             .join(', ');
       }
 
-      // Auto-fill calories if present and field is empty
+      // Auto-fill macros and calories from AI estimate
       final totalCal = data['total_calories'];
       if (_calories.text.isEmpty && totalCal != null) {
-        _calories.text = totalCal.toStringAsFixed(0);
+        _calories.text = (totalCal as num).toStringAsFixed(0);
+      }
+      final proteinG = data['protein_g'];
+      if (_protein.text.isEmpty && proteinG != null) {
+        _protein.text = (proteinG as num).toStringAsFixed(1);
+      }
+      final carbsG = data['carbs_g'];
+      if (_carbs.text.isEmpty && carbsG != null) {
+        _carbs.text = (carbsG as num).toStringAsFixed(1);
+      }
+      final fatsG = data['fats_g'];
+      if (_fats.text.isEmpty && fatsG != null) {
+        _fats.text = (fatsG as num).toStringAsFixed(1);
       }
 
       setState(() => _nutrientResult = data);
