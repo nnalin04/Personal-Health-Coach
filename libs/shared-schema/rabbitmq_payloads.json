@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RabbitMQ Message Payloads — health_os.tasks exchange",
+  "description": "Canonical message shapes for async task hand-offs between Orchestrator (Spring Boot) and AI Engine (FastAPI)",
+  "definitions": {
+
+    "FoodVisionTask": {
+      "description": "Routed to: health_os.tasks / food.vision (Direct Queue). Triggers Gemini Vision pipeline.",
+      "type": "object",
+      "required": ["taskId", "userId", "chatId", "imageUrl"],
+      "properties": {
+        "taskId":    { "type": "string", "format": "uuid" },
+        "userId":    { "type": "string", "format": "uuid" },
+        "chatId":    { "type": "string" },
+        "imageUrl":  { "type": "string", "format": "uri", "description": "GCS URL of the uploaded food image" },
+        "userContext": {
+          "type": "object",
+          "properties": {
+            "region":              { "type": "string" },
+            "cuisineStyle":        { "type": "string" },
+            "dietaryRestrictions": { "type": "string" }
+          }
+        },
+        "timestamp": { "type": "integer", "description": "Unix epoch ms" }
+      }
+    },
+
+    "MedicalOcrTask": {
+      "description": "Routed to: health_os.tasks / medical.ocr (Claim Check Pattern). PDF stored in GCS; message contains reference URL.",
+      "type": "object",
+      "required": ["taskId", "userId", "chatId", "documentUrl"],
+      "properties": {
+        "taskId":      { "type": "string", "format": "uuid" },
+        "userId":      { "type": "string", "format": "uuid" },
+        "chatId":      { "type": "string" },
+        "documentUrl": { "type": "string", "format": "uri", "description": "GCS URL of the uploaded PDF" },
+        "config": {
+          "type": "object",
+          "properties": {
+            "extractEntities": { "type": "boolean", "default": true },
+            "normalizeUnits":  { "type": "boolean", "default": true }
+          }
+        },
+        "timestamp": { "type": "integer" }
+      }
+    },
+
+    "RagInsightTask": {
+      "description": "Routed to: health_os.insights / rag.correlate (Redis Stream). Triggers LangChain + pgvector correlation for dashboard suggestions.",
+      "type": "object",
+      "required": ["taskId", "userId"],
+      "properties": {
+        "taskId":              { "type": "string", "format": "uuid" },
+        "userId":              { "type": "string", "format": "uuid" },
+        "triggerEvent":        { "type": "string", "enum": ["meal_logged", "report_processed", "daily_summary"], "description": "What triggered this RAG run" },
+        "deficiencyMarkers":   { "type": "array", "items": { "type": "string" }, "description": "Nutrients below threshold to focus on" },
+        "timestamp":           { "type": "integer" }
+      }
+    },
+
+    "TaskResult": {
+      "description": "Published back to Orchestrator on completion (via reply queue or WebSocket notification)",
+      "type": "object",
+      "required": ["taskId", "userId", "status"],
+      "properties": {
+        "taskId":    { "type": "string", "format": "uuid" },
+        "userId":    { "type": "string", "format": "uuid" },
+        "status":    { "type": "string", "enum": ["COMPLETED", "FAILED", "PARTIAL"] },
+        "result":    { "type": "object",  "description": "Parsed output (MealLog, BloodMetrics[], or RAG insight text)" },
+        "error":     { "type": ["string", "null"] },
+        "timestamp": { "type": "integer" }
+      }
+    }
+  }
+}

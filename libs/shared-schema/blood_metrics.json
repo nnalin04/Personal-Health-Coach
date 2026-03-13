@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BloodMetrics",
+  "description": "Structured clinical data extracted from medical lab reports via Google Document AI OCR",
+  "type": "object",
+  "required": ["id", "userId", "markerName", "value", "unit", "testDate"],
+  "properties": {
+    "id":           { "type": "string", "format": "uuid" },
+    "userId":       { "type": "string", "format": "uuid" },
+    "markerName":   { "type": "string", "examples": ["HbA1c", "Hemoglobin", "Vitamin D", "TSH", "Serum Ferritin"] },
+    "loincCode":    { "type": ["string", "null"], "description": "LOINC code from Healthcare NLP mapping" },
+    "value":        { "type": "number" },
+    "unit":         { "type": "string", "examples": ["%", "g/dL", "ng/mL", "mIU/L", "ng/mL"] },
+    "referenceMin": { "type": ["number", "null"], "description": "Lab reference range lower bound" },
+    "referenceMax": { "type": ["number", "null"], "description": "Lab reference range upper bound" },
+    "status":       { "type": ["string", "null"], "enum": ["normal", "low", "high", "critical", null] },
+    "testDate":     { "type": "string", "format": "date" },
+    "reportId":     { "type": ["string", "null"], "description": "Source medical report ID" },
+    "encryptedRaw": { "type": ["string", "null"], "description": "AES-256 encrypted original OCR text (DPDP compliance)" },
+    "syncedAt":     { "type": ["string", "null"], "format": "date-time" }
+  }
+}

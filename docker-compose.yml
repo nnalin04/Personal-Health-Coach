@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: health-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-health_coach}
@@ -11,45 +11,77 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-health_user} -d ${POSTGRES_DB:-health_coach}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-health_user} -d ${POSTGRES_DB:-health_coach}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: health-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-health_rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-health_rabbit_pass}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: health-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   fastapi-ai:
     build:
-      context: ./ai-service
+      context: ./services/ai-engine
     container_name: fastapi-ai
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       APP_ENV: docker
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-health_rabbit}:${RABBITMQ_PASS:-health_rabbit_pass}@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
+      DB_URL: postgresql://${POSTGRES_USER:-health_user}:${POSTGRES_PASSWORD:-health_password}@postgres:5432/${POSTGRES_DB:-health_coach}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 15s
       timeout: 5s
       retries: 5
 
   springboot-app:
     build:
-      context: ./backend
+      context: ./services/orchestrator
     container_name: springboot-app
     depends_on:
       postgres:
         condition: service_healthy
       fastapi-ai:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/health_coach}
@@ -59,8 +91,14 @@ services:
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       AI_BASE_URL: ${AI_BASE_URL:-http://fastapi-ai:8000}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USER:-health_rabbit}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-health_rabbit_pass}
     ports:
       - "8080:8080"
 
 volumes:
   postgres_data:
+  rabbitmq_data:
+  redis_data:

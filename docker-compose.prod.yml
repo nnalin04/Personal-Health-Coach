@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: health-coach-postgres
     restart: unless-stopped
     environment:
@@ -17,6 +17,37 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    container_name: health-coach-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - health-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: health-coach-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - health-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   fastapi-ai:
     image: gcr.io/my-project-poc-478915/health-coach-ai:latest
     container_name: health-coach-ai
@@ -24,15 +55,23 @@ services:
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     networks:
       - health-network
-    # Not exposing ports to host - backend communicates via internal network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   springboot-app:
     image: gcr.io/my-project-poc-478915/health-coach-backend:latest
     container_name: health-coach-backend
     restart: unless-stopped
-    # Port 8080 is NOT exposed to the host; nginx handles all ingress
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
@@ -42,6 +81,10 @@ services:
       - AI_BASE_URL=http://fastapi-ai:8000
       - UPLOAD_DIR=/app/uploads
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
     volumes:
       - app_uploads:/app/uploads
     networks:
@@ -51,6 +94,8 @@ services:
         condition: service_healthy
       fastapi-ai:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   nginx:
     image: nginx:alpine
@@ -60,7 +105,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     networks:
@@ -68,23 +113,10 @@ services:
     depends_on:
       - springboot-app
 
-  certbot:
-    image: certbot/certbot
-    container_name: health-coach-certbot
-    restart: "no"
-    volumes:
-      - letsencrypt:/etc/letsencrypt
-      - certbot_www:/var/www/certbot
-    command: >
-      certonly --webroot
-      -w /var/www/certbot
-      --email admin@healthcoach.app
-      --agree-tos
-      --no-eff-email
-      -d healthcoach.duckdns.org
-
 volumes:
   postgres_data:
+  rabbitmq_data:
+  redis_data:
   app_uploads:
   letsencrypt:
   certbot_www:

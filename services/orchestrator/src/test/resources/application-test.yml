@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    # Skip V5+ (pgvector/PostgreSQL extensions) — not H2-compatible
+    target: 4
+  main:
+    allow-bean-definition-overriding: true
+
+app:
+  jwt:
+    secret: averylongsecretkeyforunitteststhatmustbeatleast32characterslong
+    expiration-ms: 3600000
+  ai:
+    base-url: http://localhost:8081
+  upload-dir: target/test-uploads
+
+google:
+  client:
+    id: test-client-id

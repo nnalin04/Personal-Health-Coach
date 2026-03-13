@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TasteProfile",
+  "description": "User's cultural, regional, and dietary preferences — the core personalization signal for the Health OS",
+  "type": "object",
+  "required": ["userId", "region"],
+  "properties": {
+    "userId":             { "type": "string",  "format": "uuid" },
+    "region":             { "type": "string",  "examples": ["Maharashtra", "Punjab", "South India", "Rajasthan", "Bengal"] },
+    "stapleGrains":       { "type": "string",  "examples": ["rice", "wheat", "bajra", "jowar", "ragi"] },
+    "cuisineStyle":       { "type": "string",  "examples": ["vegetarian", "non-veg", "vegan", "jain", "eggetarian"] },
+    "dietaryRestrictions":{ "type": "string",  "examples": ["none", "no onion-garlic", "gluten-free", "lactose-free"] },
+    "healthGoal":         { "type": "string",  "examples": ["lose weight", "build muscle", "manage diabetes", "stay fit"] },
+    "spicePreference":    { "type": "string",  "enum": ["mild", "medium", "spicy"] },
+    "mealFrequency":      { "type": "integer", "minimum": 2, "maximum": 6, "description": "Number of meals per day" },
+    "allergies":          { "type": "array",   "items": { "type": "string" }, "examples": [["peanuts", "shellfish"]] },
+    "consentVersion":     { "type": "string",  "description": "DPDP Act consent version accepted" },
+    "withdrawalRequested":{ "type": "boolean", "default": false, "description": "DPDP Act data withdrawal flag" },
+    "createdAt":          { "type": "string",  "format": "date-time" },
+    "updatedAt":          { "type": "string",  "format": "date-time" }
+  }
+}

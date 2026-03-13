@@ -137,3 +137,50 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Upgraded Gemini 1.5-flash → 2.5-flash (1.5 retired/404).
 - [x] Nutrient Intelligence Phase 1: food photo/text analysis, micronutrient tracking vs RDA,
       culturally-aware recommendations. Full plan at `plans/nutrient_intelligence_plan.md`.
+
+---
+
+## 11) Health OS Architecture Pivot (2026-03-14)
+
+> Full spec: `Health OS Architecture and Roadmap.md`
+
+### Phase 1 — Infrastructure + Monorepo ✅
+- [x] Restructure to monorepo: `services/orchestrator`, `services/ai-engine`, `apps/mobile-app`, `libs/shared-schema`, `infra/`
+- [x] Archive Flutter app to `apps/flutter-legacy/`
+- [x] Replace `postgres:16` with `pgvector/pgvector:pg16` in all compose files
+- [x] Add RabbitMQ 3.13 to docker-compose (local + prod)
+- [x] Add Redis 7 to docker-compose (for RAG Redis Streams)
+- [x] V5 Flyway migration: `CREATE EXTENSION vector`, `taste_profiles`, `knowledge_base`, `omni_chat_tasks`, WatermelonDB `updated_at` columns
+
+### Phase 2 — Mobile Foundation + Sync ✅
+- [x] Bootstrap React Native + Expo (blank-typescript) in `apps/mobile-app`
+- [x] Install WatermelonDB + Zustand + @react-navigation
+- [x] 3-page minimalist UI: OnboardingScreen, DashboardScreen, OmniChatScreen
+- [x] `POST /api/v1/sync/pull` and `POST /api/v1/sync/push` WatermelonDB sync endpoints
+- [ ] WatermelonDB schema definition (Model classes for MealLog, BloodMetrics, etc.) — Phase 2b
+- [ ] Full push phase upsert logic in SyncController — Phase 2b
+- [ ] TasteProfile loading from DB for OmniChat user context — Phase 2b
+
+### Phase 3 — AI Intelligence + Smart Routing ✅
+- [x] Smart Router in FastAPI (`app/routers/smart_router.py`) — classifies FOOD | REPORT | TEXT
+- [x] RabbitMQ producer (`TaskPublisher.java`) in Spring Boot — food.vision, medical.ocr, rag.correlate routing keys
+- [x] RabbitMQ consumer (`rabbitmq_consumer.py`) in FastAPI — dispatches to Smart Router
+- [x] `POST /api/v1/chat/upload` OmniChat endpoint in Spring Boot — returns taskId + "PROCESSING"
+- [x] `spring-boot-starter-amqp` + `spring-boot-starter-websocket` added to pom.xml
+- [x] `aio-pika`, `langchain`, `pgvector`, `psycopg2-binary` added to AI service requirements.txt
+- [ ] WebSocket notification back to mobile on task completion — Phase 3b
+- [ ] GCS file upload for food images and PDFs — Phase 3b
+
+### Phase 4 — Clinical OCR + RAG (Pending)
+- [ ] Google Cloud Document AI integration for medical PDF parsing
+- [ ] LangChain + pgvector RAG correlation engine
+- [ ] Knowledge Base seeding with ICMR dietary guidelines + FSSAI RDA data
+- [ ] WebSocket bridge (STOMP over WS) for real-time task notifications
+- [ ] Graceful fallback conversation when food confidence < 0.80
+
+### Phase 5 — Compliance + Regional Refinement (Pending)
+- [ ] DPDP Act compliance: AES-256 `@ColumnTransformer` on sensitive medical fields
+- [ ] Consent management: `consent_version` + `withdrawal_requested` flow
+- [ ] 72-hour breach notification documentation
+- [ ] Quick-commerce receipt parsing (Blinkit/Instamart OCR)
+- [ ] Full security audit against Health OS threat model

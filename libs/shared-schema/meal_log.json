@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MealLog",
+  "description": "Time-series food log entry — supports both manual entry and AI vision estimation",
+  "type": "object",
+  "required": ["id", "userId", "dishName", "loggedAt"],
+  "properties": {
+    "id":           { "type": "string", "format": "uuid", "description": "WatermelonDB-compatible high-entropy ID" },
+    "userId":       { "type": "string", "format": "uuid" },
+    "dishName":     { "type": "string", "examples": ["Palak Dal", "2 idli with sambar", "90g peanuts"] },
+    "mealType":     { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"] },
+    "imageUrl":     { "type": ["string", "null"], "format": "uri", "description": "GCS/S3 URL of food photo if uploaded" },
+    "calories":     { "type": ["number", "null"] },
+    "macros": {
+      "type": "object",
+      "properties": {
+        "proteinG": { "type": ["number", "null"] },
+        "carbsG":   { "type": ["number", "null"] },
+        "fatsG":    { "type": ["number", "null"] }
+      }
+    },
+    "nutrients": {
+      "type": "object",
+      "description": "Micronutrient estimates from Gemini Vision",
+      "properties": {
+        "ironMg":      { "type": ["number", "null"] },
+        "calciumMg":   { "type": ["number", "null"] },
+        "vitaminDMcg": { "type": ["number", "null"] },
+        "vitaminB12Mcg":{ "type": ["number", "null"] },
+        "vitaminCMg":  { "type": ["number", "null"] }
+      }
+    },
+    "confidenceNote":  { "type": ["string", "null"], "description": "AI confidence note from Gemini" },
+    "sourceType":      { "type": "string", "enum": ["manual", "vision", "text-ai"], "description": "How macros were obtained" },
+    "loggedAt":        { "type": "string", "format": "date-time" },
+    "syncedAt":        { "type": ["string", "null"], "format": "date-time", "description": "WatermelonDB sync timestamp" }
+  }
+}
