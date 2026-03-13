@@ -26,7 +26,7 @@ def test_extract_metrics_with_health_text_returns_structure() -> None:
     })
     assert r.status_code == 200, f"extract-metrics failed: {r.status_code} {r.text}"
     data = r.json()
-    assert "extractedText" in data, "Missing 'extractedText' key"
+    assert "raw_text" in data, "Missing 'raw_text' key"
     assert "metrics" in data, "Missing 'metrics' key"
     assert isinstance(data["metrics"], list)
 
@@ -36,7 +36,7 @@ def test_extract_metrics_with_empty_text() -> None:
     r = client.post("/extract-metrics", json={"text": ""})
     assert r.status_code == 200, f"Empty text failed: {r.status_code} {r.text}"
     data = r.json()
-    assert "extractedText" in data
+    assert "raw_text" in data
     assert isinstance(data["metrics"], list)
 
 
@@ -53,4 +53,4 @@ def test_extract_metrics_non_health_text() -> None:
     })
     assert r.status_code == 200, f"Non-health text failed: {r.status_code} {r.text}"
     data = r.json()
-    assert "extractedText" in data
+    assert "raw_text" in data

@@ -70,9 +70,9 @@ def _minimal_pdf_base64() -> str:
 def test_parse_medical_report_with_base64_pdf() -> None:
     """POST /parse-medical-report with base64 PDF must return labValues and notes."""
     r = client.post("/parse-medical-report", json={
-        "file_name": "report.pdf",
-        "file_base64": _minimal_pdf_base64(),
-        "extracted_text": (
+        "fileName": "report.pdf",
+        "fileBase64": _minimal_pdf_base64(),
+        "extractedText": (
             "Vitamin D: 22.5 ng/mL\n"
             "TSH: 2.1 mIU/L\n"
             "Hemoglobin: 14.2 g/dL\n"
@@ -90,11 +90,9 @@ def test_parse_medical_report_with_base64_pdf() -> None:
 
 
 def test_parse_medical_report_empty_text_returns_empty_labs() -> None:
-    """Sending no text and an empty PDF should return empty labs gracefully."""
+    """Sending only empty extractedText (no PDF) should return empty labs gracefully."""
     r = client.post("/parse-medical-report", json={
-        "file_name": "empty.pdf",
-        "file_base64": _minimal_pdf_base64(),
-        "extracted_text": "",
+        "extractedText": "",
     })
     assert r.status_code == 200, f"Unexpected status: {r.status_code} {r.text}"
     data = r.json()
