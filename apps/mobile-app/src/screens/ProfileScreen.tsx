@@ -8,7 +8,7 @@
  *   3. Payment         — plan, billing (placeholder for premium tier)
  *   4. Account         — export data, delete account, logout
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,11 +19,14 @@ import {
   SafeAreaView,
   Alert,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { AppStackParamList } from '../navigation/AppNavigator';
+import { useAuthStore } from '../store/authStore';
+import apiClient from '../services/apiClient';
 
-type Props = { navigation: StackNavigationProp<RootStackParamList, 'Profile'> };
+type Props = { navigation: StackNavigationProp<AppStackParamList, 'Profile'> };
 
 interface ProfileData {
   // Personal
@@ -108,28 +111,82 @@ function ChipRow({
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const { user, logout, refreshUser } = useAuthStore();
   const [profile, setProfile] = useState<ProfileData>(INITIAL);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Load profile from API on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiClient.get('/users/me');
+        const u = res.data;
+        setProfile((prev) => ({
+          ...prev,
+          name:          u.email?.split('@')[0] ?? prev.name,
+          gender:        u.gender        ?? '',
+          weightKg:      '',  // stored in body-metrics, not user entity
+          heightCm:      u.height != null ? String(u.height) : '',
+          region:        u.region        ?? '',
+          cuisineStyle:  u.cuisineStyle  ?? '',
+          restrictions:  u.dietaryRestrictions ?? 'none',
+          healthGoal:    u.goal          ?? '',
+        }));
+      } catch {
+        // silently degrade
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const set = (key: keyof ProfileData) => (val: string | boolean) =>
     setProfile((p) => ({ ...p, [key]: val }));
 
-  const handleSave = () => {
-    // TODO: PATCH /api/v1/profile with profile data
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await apiClient.put('/users/me', {
+        gender:               profile.gender     || null,
+        height:               profile.heightCm   ? parseFloat(profile.heightCm)  : null,
+        goal:                 profile.healthGoal || null,
+        region:               profile.region     || null,
+        cuisineStyle:         profile.cuisineStyle || null,
+        dietaryRestrictions:  profile.restrictions || null,
+      });
+      await refreshUser();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      Alert.alert('Save failed', 'Could not save your profile. Check your connection.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: () => navigation.replace('Onboarding') },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          // AppNavigator will automatically switch to Auth stack when token clears
+        },
+      },
     ]);
   };
 
-  const handleExport = () => {
-    Alert.alert('Export Data', 'Your data export will be emailed to you within 24 hours. (DPDP Act §17)');
-    // TODO: POST /api/users/me/export
+  const handleExport = async () => {
+    try {
+      await apiClient.get('/users/me/export');
+      Alert.alert('Export Data', 'Your data export has been queued. (DPDP Act §17)');
+    } catch {
+      Alert.alert('Export Data', 'Could not process export. Try again later.');
+    }
   };
 
   const handleDelete = () => {
@@ -141,17 +198,20 @@ export default function ProfileScreen({ navigation }: Props) {
         {
           text: 'Delete permanently',
           style: 'destructive',
-          onPress: () => {
-            // TODO: DELETE /api/users/me
-            navigation.replace('Onboarding');
+          onPress: async () => {
+            try {
+              await apiClient.delete('/users/me');
+            } catch { /* ignore */ }
+            await logout();
           },
         },
       ],
     );
   };
 
-  // Initials avatar from name
-  const initials = profile.name
+  // Initials: prefer display name, fall back to email prefix
+  const displayName = profile.name !== 'Your Name' ? profile.name : (user?.email?.split('@')[0] ?? '');
+  const initials = displayName
     .split(' ')
     .map((w) => w[0] ?? '')
     .slice(0, 2)
@@ -166,8 +226,11 @@ export default function ProfileScreen({ navigation }: Props) {
           <Text style={styles.backText}>← Dashboard</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : 'Save'}</Text>
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+          {saving
+            ? <ActivityIndicator size="small" color="#2563EB" />
+            : <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : 'Save'}</Text>
+          }
         </TouchableOpacity>
       </View>
 
@@ -177,7 +240,7 @@ export default function ProfileScreen({ navigation }: Props) {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          <Text style={styles.avatarName}>{profile.name || 'Your Name'}</Text>
+          <Text style={styles.avatarName}>{displayName || user?.email || 'Your Name'}</Text>
           <Text style={styles.avatarPlan}>Free Plan</Text>
         </View>
 

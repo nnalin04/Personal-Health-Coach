@@ -23,9 +23,11 @@ import {
   Platform,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { AppStackParamList } from '../navigation/AppNavigator';
+import apiClient from '../services/apiClient';
+import { useAuthStore } from '../store/authStore';
 
-type Props = { navigation: StackNavigationProp<RootStackParamList, 'Onboarding'> };
+type Props = { navigation: StackNavigationProp<AppStackParamList, 'Onboarding'> };
 
 interface ChatMessage {
   id: string;
@@ -42,6 +44,7 @@ const ONBOARDING_STEPS = [
 ];
 
 export default function OnboardingScreen({ navigation }: Props) {
+  const { markOnboardingDone } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: '0', role: 'assistant', text: ONBOARDING_STEPS[0].prompt },
   ]);
@@ -71,12 +74,27 @@ export default function OnboardingScreen({ navigation }: Props) {
         role: 'assistant',
         text: `Perfect, ${updatedProfile.name || trimmed}! Your Health OS is ready. Let me take you to your dashboard.`,
       });
-      // TODO: save Taste_Profile to WatermelonDB and sync to orchestrator
-      setTimeout(() => navigation.replace('Dashboard'), 1800);
+      // Save taste profile to backend then navigate
+      saveProfileAndNavigate(updatedProfile);
     }
 
     setMessages(nextMessages);
     setInput('');
+  };
+
+  const saveProfileAndNavigate = async (p: Record<string, string>) => {
+    try {
+      await apiClient.put('/users/me', {
+        goal:                 p.goal,
+        region:               p.region,
+        cuisineStyle:         p.cuisine,
+        dietaryRestrictions:  p.restrictions,
+      });
+    } catch {
+      // non-fatal: user can update via Profile screen or OmniChat
+    }
+    await markOnboardingDone();
+    setTimeout(() => navigation.replace('Dashboard'), 800);
   };
 
   return (

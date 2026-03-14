@@ -3,14 +3,16 @@
  *
  * The primary input engine for the Health OS.
  * Universal '+' button supports:
- *   - Text messages  (natural language food/symptom logging)
+ *   - Text messages  (natural language food/symptom logging + profile updates)
  *   - Food images    (routed → Gemini Vision pipeline)
  *   - Medical PDFs   (routed → Document AI OCR pipeline)
  *
- * Long-running tasks return taskId + "PROCESSING" status.
- * WebSocket subscription updates the chat when AI finishes.
+ * All API calls go through apiClient (JWT-authenticated).
  *
- * Smart Router on backend classifies input as FOOD | REPORT | TEXT.
+ * After submitting a FOOD or REPORT task, polls
+ * GET /api/v1/chat/tasks/{taskId} every 3 s until COMPLETED/FAILED (max 60 s).
+ *
+ * For PROFILE_UPDATE (synchronous) — shows the AI confirmation inline.
  */
 import React, { useState, useRef } from 'react';
 import {
@@ -26,109 +28,139 @@ import {
   Alert,
   ActionSheetIOS,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker    from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { AppStackParamList } from '../navigation/AppNavigator';
+import apiClient from '../services/apiClient';
 
-type Props = { navigation: StackNavigationProp<RootStackParamList, 'OmniChat'> };
+type Props = { navigation: StackNavigationProp<AppStackParamList, 'OmniChat'> };
 
 type MessageType = 'text' | 'food-image' | 'medical-pdf' | 'ai-response' | 'processing';
 
 interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  type: MessageType;
-  text: string;
+  id:      string;
+  role:    'user' | 'assistant';
+  type:    MessageType;
+  text:    string;
   taskId?: string;
 }
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://healthcoach.duckdns.org/api';
-
-interface OmniChatResponse {
-  taskId: string;
-  status: 'PROCESSING' | 'COMPLETED';
-  estimatedTime?: string;
-  message?: string;   // set when status === 'COMPLETED' (e.g. profile update confirmation)
-  type?: string;      // e.g. 'PROFILE_UPDATE'
-}
+// ── API helpers ───────────────────────────────────────────────────────────────
 
 async function uploadToOmniChat(
   payload: { text?: string; file?: { uri: string; name: string; mimeType: string } },
   type: 'FOOD' | 'REPORT' | 'TEXT',
   chatId: string,
-): Promise<OmniChatResponse> {
+) {
   const form = new FormData();
-  form.append('type', type);
+  form.append('type',   type);
   form.append('chatId', chatId);
   if (payload.text) form.append('message', payload.text);
   if (payload.file) {
-    form.append('file', { uri: payload.file.uri, name: payload.file.name, type: payload.file.mimeType } as any);
+    form.append('file', {
+      uri:  payload.file.uri,
+      name: payload.file.name,
+      type: payload.file.mimeType,
+    } as any);
   }
-  const res = await fetch(`${BASE_URL}/v1/chat/upload`, {
-    method: 'POST',
-    body: form,
-    headers: { 'Accept': 'application/json' },
+  const res = await apiClient.post('/v1/chat/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
-  return res.json();
+  return res.data as {
+    taskId:         string;
+    status:         'PROCESSING' | 'COMPLETED';
+    estimatedTime?: string;
+    message?:       string;
+    type?:          string;
+  };
 }
 
+/** Poll GET /api/v1/chat/tasks/{taskId} until status is terminal or timeout. */
+async function pollTaskResult(taskId: string, onUpdate: (text: string) => void) {
+  const MAX_POLLS = 20;
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      const res  = await apiClient.get(`/v1/chat/tasks/${taskId}`);
+      const task = res.data;
+
+      if (task.status === 'COMPLETED') {
+        const r = task.result ?? {};
+        if (r.type === 'FOOD' && r.mealLog) {
+          const m = r.mealLog;
+          onUpdate(`✅ Logged! ${m.dishName} — ${m.calories} kcal, ${m.proteinG}g protein, ${m.carbsG}g carbs, ${m.fatsG}g fat.\n${m.confidence ?? ''}`);
+        } else {
+          onUpdate(r.message ?? '✅ Done! Check your Dashboard for updates.');
+        }
+        return;
+      }
+      if (task.status === 'FAILED')  { onUpdate(`⚠️ Processing failed: ${task.error ?? 'Unknown error'}`); return; }
+      if (task.status === 'PARTIAL') { onUpdate(task.result?.message ?? '⚠️ Partial result — some features coming soon.'); return; }
+    } catch {
+      // network hiccup — keep polling
+    }
+  }
+  onUpdate('⏱ Still processing… check Dashboard in a moment.');
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function OmniChatScreen({ navigation }: Props) {
-  const chatId = useRef(`chat-${Date.now()}`).current;
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '0',
-      role: 'assistant',
-      type: 'text',
-      text: "What did you eat, or how are you feeling? You can also share a food photo, upload a medical report, or update your profile — just say things like \"Update my weight to 75 kg\" or \"Change my region to Punjab\".",
-    },
-  ]);
-  const [input, setInput] = useState('');
+  const chatId  = useRef(`chat-${Date.now()}`).current;
   const listRef = useRef<FlatList>(null);
 
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    id: '0', role: 'assistant', type: 'text',
+    text: "What did you eat, or how are you feeling? You can share a food photo, upload a medical report, or update your profile — try \"Update my weight to 75 kg\" or \"Change my region to Punjab\".",
+  }]);
+  const [input, setInput] = useState('');
+
   const addMessage = (msg: Omit<ChatMessage, 'id'>) => {
-    const newMsg = { ...msg, id: Date.now().toString() };
-    setMessages((prev) => [...prev, newMsg]);
-    return newMsg;
+    const m = { ...msg, id: Date.now().toString() };
+    setMessages((prev) => [...prev, m]);
+    return m;
   };
+
+  const replaceProcessing = (text: string) =>
+    setMessages((prev) =>
+      prev.map((m) => m.type === 'processing' ? { ...m, type: 'ai-response' as const, text } : m),
+    );
+
+  // ── Send text ─────────────────────────────────────────────────────────────
 
   const handleSendText = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
     setInput('');
-    addMessage({ role: 'user', type: 'text', text: trimmed });
-    addMessage({ role: 'assistant', type: 'processing', text: '⏳ Analyzing...' });
+    addMessage({ role: 'user',      type: 'text',       text: trimmed });
+    addMessage({ role: 'assistant', type: 'processing',  text: '⏳ Thinking...' });
 
     try {
       const result = await uploadToOmniChat({ text: trimmed }, 'TEXT', chatId);
-      const responseText = result.status === 'COMPLETED' && result.message
-        ? result.message
-        : `Got it! Task ${result.taskId} is ${result.status}. Estimated: ${result.estimatedTime}`;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.type === 'processing' ? { ...m, type: 'ai-response', text: responseText } : m,
-        ),
-      );
+      if (result.status === 'COMPLETED' && result.message) {
+        replaceProcessing(result.message);
+      } else {
+        replaceProcessing("⏳ Working on it...");
+        await pollTaskResult(result.taskId, replaceProcessing);
+      }
     } catch {
-      setMessages((prev) =>
-        prev.map((m) => (m.type === 'processing' ? { ...m, type: 'ai-response', text: '⚠️ Could not reach Health OS. Check your connection.' } : m)),
-      );
+      replaceProcessing('⚠️ Could not reach Health OS. Check your connection.');
     }
   };
+
+  // ── Attachment ────────────────────────────────────────────────────────────
 
   const handleAttach = () => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         { options: ['Cancel', 'Food Photo', 'Medical Report (PDF)'], cancelButtonIndex: 0 },
-        (idx) => {
-          if (idx === 1) pickFoodImage();
-          if (idx === 2) pickMedicalPdf();
-        },
+        (idx) => { if (idx === 1) pickFoodImage(); if (idx === 2) pickMedicalPdf(); },
       );
     } else {
       Alert.alert('Attach', 'Choose type', [
-        { text: 'Food Photo',         onPress: pickFoodImage },
-        { text: 'Medical Report PDF', onPress: pickMedicalPdf },
+        { text: 'Food Photo',           onPress: pickFoodImage },
+        { text: 'Medical Report (PDF)', onPress: pickMedicalPdf },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -140,25 +172,17 @@ export default function OmniChatScreen({ navigation }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (result.canceled) return;
     const asset = result.assets[0];
-    addMessage({ role: 'user', type: 'food-image', text: `📷 Food photo attached` });
-    addMessage({ role: 'assistant', type: 'processing', text: '🔍 Identifying food and estimating macros...' });
+    addMessage({ role: 'user',      type: 'food-image',  text: '📷 Food photo attached' });
+    addMessage({ role: 'assistant', type: 'processing',   text: '🔍 Identifying food and estimating macros...' });
     try {
       const upload = await uploadToOmniChat(
         { file: { uri: asset.uri, name: asset.fileName ?? 'food.jpg', mimeType: 'image/jpeg' } },
-        'FOOD',
-        chatId,
+        'FOOD', chatId,
       );
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.type === 'processing'
-            ? { ...m, type: 'ai-response', text: `✅ Vision analysis started (${upload.taskId}). Dashboard will update in ~${upload.estimatedTime}.`, taskId: upload.taskId }
-            : m,
-        ),
-      );
+      replaceProcessing('⏳ Analysing your photo...');
+      await pollTaskResult(upload.taskId, replaceProcessing);
     } catch {
-      setMessages((prev) =>
-        prev.map((m) => (m.type === 'processing' ? { ...m, type: 'ai-response', text: '⚠️ Upload failed. Try again.' } : m)),
-      );
+      replaceProcessing('⚠️ Upload failed. Try again.');
     }
   };
 
@@ -166,27 +190,21 @@ export default function OmniChatScreen({ navigation }: Props) {
     const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf' });
     if (result.canceled) return;
     const asset = result.assets[0];
-    addMessage({ role: 'user', type: 'medical-pdf', text: `📄 Medical report: ${asset.name}` });
-    addMessage({ role: 'assistant', type: 'processing', text: '🏥 Extracting lab values from your report...' });
+    addMessage({ role: 'user',      type: 'medical-pdf', text: `📄 Medical report: ${asset.name}` });
+    addMessage({ role: 'assistant', type: 'processing',   text: '🏥 Extracting lab values from your report...' });
     try {
       const upload = await uploadToOmniChat(
         { file: { uri: asset.uri, name: asset.name, mimeType: 'application/pdf' } },
-        'REPORT',
-        chatId,
+        'REPORT', chatId,
       );
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.type === 'processing'
-            ? { ...m, type: 'ai-response', text: `✅ OCR started (${upload.taskId}). Blood metrics will appear in your Dashboard in ~${upload.estimatedTime}.`, taskId: upload.taskId }
-            : m,
-        ),
-      );
+      replaceProcessing('⏳ Processing your report...');
+      await pollTaskResult(upload.taskId, replaceProcessing);
     } catch {
-      setMessages((prev) =>
-        prev.map((m) => (m.type === 'processing' ? { ...m, type: 'ai-response', text: '⚠️ Upload failed. Try again.' } : m)),
-      );
+      replaceProcessing('⚠️ Upload failed. Try again.');
     }
   };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safe}>
