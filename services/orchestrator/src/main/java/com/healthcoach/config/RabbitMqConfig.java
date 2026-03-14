@@ -12,30 +12,34 @@ import org.springframework.context.annotation.Configuration;
  *
  * Exchange: health_os.tasks (topic)
  *   Routing keys:
- *     food.vision   → food-vision-queue   (Gemini Vision pipeline)
- *     medical.ocr   → medical-ocr-queue   (Document AI OCR pipeline)
- *     rag.correlate → rag-insight-queue   (LangChain + pgvector RAG)
+ *     food.vision    → food-vision-queue     (Gemini Vision pipeline)
+ *     medical.ocr    → medical-ocr-queue     (Document AI OCR pipeline)
+ *     rag.correlate  → rag-insight-queue     (LangChain + pgvector RAG)
+ *     task.completed → task-completed-queue  (AI Engine → Spring Boot WS bridge)
  */
 @Configuration
 public class RabbitMqConfig {
 
-    public static final String EXCHANGE      = "health_os.tasks";
-    public static final String FOOD_QUEUE    = "food-vision-queue";
-    public static final String MEDICAL_QUEUE = "medical-ocr-queue";
-    public static final String RAG_QUEUE     = "rag-insight-queue";
+    public static final String EXCHANGE          = "health_os.tasks";
+    public static final String FOOD_QUEUE        = "food-vision-queue";
+    public static final String MEDICAL_QUEUE     = "medical-ocr-queue";
+    public static final String RAG_QUEUE         = "rag-insight-queue";
+    public static final String COMPLETED_QUEUE   = "task-completed-queue";
 
-    public static final String FOOD_KEY    = "food.vision";
-    public static final String MEDICAL_KEY = "medical.ocr";
-    public static final String RAG_KEY     = "rag.correlate";
+    public static final String FOOD_KEY          = "food.vision";
+    public static final String MEDICAL_KEY       = "medical.ocr";
+    public static final String RAG_KEY           = "rag.correlate";
+    public static final String COMPLETED_KEY     = "task.completed";
 
     @Bean
     public TopicExchange healthOsExchange() {
         return ExchangeBuilder.topicExchange(EXCHANGE).durable(true).build();
     }
 
-    @Bean public Queue foodVisionQueue()   { return QueueBuilder.durable(FOOD_QUEUE).build(); }
-    @Bean public Queue medicalOcrQueue()   { return QueueBuilder.durable(MEDICAL_QUEUE).build(); }
-    @Bean public Queue ragInsightQueue()   { return QueueBuilder.durable(RAG_QUEUE).build(); }
+    @Bean public Queue foodVisionQueue()    { return QueueBuilder.durable(FOOD_QUEUE).build(); }
+    @Bean public Queue medicalOcrQueue()    { return QueueBuilder.durable(MEDICAL_QUEUE).build(); }
+    @Bean public Queue ragInsightQueue()    { return QueueBuilder.durable(RAG_QUEUE).build(); }
+    @Bean public Queue taskCompletedQueue() { return QueueBuilder.durable(COMPLETED_QUEUE).build(); }
 
     @Bean public Binding foodBinding(Queue foodVisionQueue, TopicExchange healthOsExchange) {
         return BindingBuilder.bind(foodVisionQueue).to(healthOsExchange).with(FOOD_KEY);
@@ -45,6 +49,9 @@ public class RabbitMqConfig {
     }
     @Bean public Binding ragBinding(Queue ragInsightQueue, TopicExchange healthOsExchange) {
         return BindingBuilder.bind(ragInsightQueue).to(healthOsExchange).with(RAG_KEY);
+    }
+    @Bean public Binding completedBinding(Queue taskCompletedQueue, TopicExchange healthOsExchange) {
+        return BindingBuilder.bind(taskCompletedQueue).to(healthOsExchange).with(COMPLETED_KEY);
     }
 
     @Bean

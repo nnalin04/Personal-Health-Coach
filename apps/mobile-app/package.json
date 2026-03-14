@@ -24,7 +24,8 @@
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-vector-icons": "^10.3.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "@stomp/stompjs": "^7.1.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
