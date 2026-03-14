@@ -22,17 +22,23 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     // AI-heavy endpoints (Gemini calls): 5 req/min per IP — protects API budget
     private static final int AI_CAPACITY = 5;
 
-    // Paths that invoke Gemini and are expensive
+    // Exact paths that invoke Gemini and are expensive
     private static final Set<String> AI_PATHS = Set.of(
             "/api/health-summary/me/ai-insights",
             "/api/nutrient/recommendations",
             "/api/extract-metrics"
     );
 
-    // Standard rate-limited paths
+    // Prefix-matched paths that invoke Gemini (chat uses Vision / RAG)
+    private static final Set<String> AI_PREFIXES = Set.of(
+            "/api/v1/chat"
+    );
+
+    // Standard rate-limited paths (prefix-matched)
     private static final Set<String> STANDARD_PREFIXES = Set.of(
             "/api/auth",
-            "/api/medical/reports"
+            "/api/medical/reports",
+            "/api/v1/sync"
     );
 
     private final Map<String, Bucket> standardBuckets = new ConcurrentHashMap<>();
@@ -50,7 +56,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String clientIp = getClientIP(request);
 
-        if (AI_PATHS.contains(path)) {
+        boolean isAiPath = AI_PATHS.contains(path)
+                || AI_PREFIXES.stream().anyMatch(path::startsWith);
+
+        if (isAiPath) {
             Bucket bucket = aiBuckets.computeIfAbsent(clientIp, k -> createBucket(AI_CAPACITY));
             if (!bucket.tryConsume(1)) {
                 response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());

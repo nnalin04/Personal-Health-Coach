@@ -3,17 +3,19 @@ package com.healthcoach.chat;
 import com.healthcoach.aiclient.AiServiceClient;
 import com.healthcoach.aiclient.dto.ParseProfileUpdateResponse;
 import com.healthcoach.messaging.TaskPublisher;
-import com.healthcoach.security.JwtTokenProvider;
+import com.healthcoach.security.UserPrincipal;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserService;
 import com.healthcoach.user.dto.UpdateProfileRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Base64;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -35,35 +37,35 @@ import java.util.UUID;
 @RequestMapping("/api/v1/chat")
 public class OmniChatController {
 
-    private final TaskPublisher     taskPublisher;
-    private final JwtTokenProvider  jwtUtil;
-    private final AiServiceClient   aiServiceClient;
-    private final UserService       userService;
-    private final JdbcTemplate      jdbc;
+    private static final Set<String> ALLOWED_IMAGE_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp", "image/heic");
+
+    private final TaskPublisher   taskPublisher;
+    private final AiServiceClient aiServiceClient;
+    private final UserService     userService;
+    private final JdbcTemplate    jdbc;
 
     public OmniChatController(
-            TaskPublisher    taskPublisher,
-            JwtTokenProvider jwtUtil,
-            AiServiceClient  aiServiceClient,
-            UserService      userService,
-            JdbcTemplate     jdbc
+            TaskPublisher   taskPublisher,
+            AiServiceClient aiServiceClient,
+            UserService     userService,
+            JdbcTemplate    jdbc
     ) {
-        this.taskPublisher    = taskPublisher;
-        this.jwtUtil          = jwtUtil;
-        this.aiServiceClient  = aiServiceClient;
-        this.userService      = userService;
-        this.jdbc             = jdbc;
+        this.taskPublisher   = taskPublisher;
+        this.aiServiceClient = aiServiceClient;
+        this.userService     = userService;
+        this.jdbc            = jdbc;
     }
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> upload(
-            @RequestHeader("Authorization") String authHeader,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam("type")   String type,
             @RequestParam("chatId") String chatId,
             @RequestParam(value = "message", required = false) String message,
             @RequestParam(value = "file",    required = false) MultipartFile file
     ) {
-        Long userId = jwtUtil.getUserIdFromToken(authHeader.replace("Bearer ", ""));
+        Long userId = currentUser.getId();
         UUID taskId = UUID.randomUUID();
 
         // Load real user context for AI personalisation
@@ -72,12 +74,26 @@ public class OmniChatController {
         int estimatedSecs;
         switch (type.toUpperCase()) {
             case "FOOD" -> {
+                if (file != null && !file.isEmpty()) {
+                    String ct = file.getContentType();
+                    if (ct == null || !ALLOWED_IMAGE_TYPES.contains(ct)) {
+                        return ResponseEntity.badRequest().body(
+                            Map.of("error", "Only JPEG, PNG, WEBP, and HEIC images are accepted"));
+                    }
+                }
                 String imageB64 = encodeFile(file);
                 taskPublisher.publishFoodVision(taskId, userId, chatId, imageB64, userContext);
                 estimatedSecs = 5;
                 insertTask(taskId, userId, chatId, "FOOD", estimatedSecs);
             }
             case "REPORT" -> {
+                if (file != null && !file.isEmpty()) {
+                    String ct = file.getContentType();
+                    if (!"application/pdf".equals(ct)) {
+                        return ResponseEntity.badRequest().body(
+                            Map.of("error", "Only PDF documents are accepted for medical reports"));
+                    }
+                }
                 // GCS upload is Phase 3b — placeholder URL for now
                 String documentUrl = "pending://" + taskId;
                 taskPublisher.publishMedicalOcr(taskId, userId, chatId, documentUrl);

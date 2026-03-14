@@ -1,8 +1,9 @@
 package com.healthcoach.sync;
 
-import com.healthcoach.security.JwtTokenProvider;
+import com.healthcoach.security.UserPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -27,22 +28,20 @@ import java.util.*;
 @RequestMapping("/api/v1/sync")
 public class SyncController {
 
-    private final JwtTokenProvider jwtUtil;
-    private final JdbcTemplate     jdbc;
+    private final JdbcTemplate jdbc;
 
-    public SyncController(JwtTokenProvider jwtUtil, JdbcTemplate jdbc) {
-        this.jwtUtil = jwtUtil;
-        this.jdbc    = jdbc;
+    public SyncController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
     }
 
     // ── Pull ──────────────────────────────────────────────────────────────────
 
     @GetMapping("/pull")
     public ResponseEntity<Map<String, Object>> pull(
-            @RequestHeader("Authorization") String authHeader,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(required = false) Long lastPulledAt
     ) {
-        Long userId = jwtUtil.getUserIdFromToken(authHeader.replace("Bearer ", ""));
+        Long userId = currentUser.getId();
         long serverTimestamp = Instant.now().toEpochMilli();
 
         LocalDateTime since = lastPulledAt != null
@@ -71,10 +70,10 @@ public class SyncController {
      */
     @PostMapping("/push")
     public ResponseEntity<Map<String, Object>> push(
-            @RequestHeader("Authorization") String authHeader,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestBody Map<String, Map<String, List<Map<String, Object>>>> body
     ) {
-        Long userId = jwtUtil.getUserIdFromToken(authHeader.replace("Bearer ", ""));
+        Long userId = currentUser.getId();
         int applied = 0;
         int failed  = 0;
 
@@ -299,8 +298,30 @@ public class SyncController {
 
     // ── Pull delta builder ────────────────────────────────────────────────────
 
+    /**
+     * Maps WatermelonDB collection names → (PG table name, explicit column list).
+     * Allowlist prevents SQL injection via the table parameter and avoids SELECT *.
+     */
+    private static final Map<String, String[]> TABLE_META = Map.of(
+        "food_logs",    new String[]{"food_logs",    "id, user_id, food_name, calories, protein, carbs, fat, date, updated_at"},
+        "workout_logs", new String[]{"workout_logs", "id, user_id, exercise_name, sets, reps, weight_kg, date, updated_at"},
+        "body_metrics", new String[]{"body_metrics", "id, user_id, weight_kg, height_cm, bmi, body_fat_percentage, recorded_at, updated_at"},
+        "step_logs",    new String[]{"step_logs",    "id, user_id, steps, date, updated_at"}
+    );
+
     private Map<String, Object> buildDelta(String table, Long userId, LocalDateTime since) {
-        String sql = "SELECT * FROM " + table + " WHERE user_id = ? AND updated_at > ? ORDER BY updated_at";
+        String[] meta = TABLE_META.get(table);
+        if (meta == null) {
+            // Unknown table — return empty delta (fail-safe)
+            return Map.of(
+                "created", Collections.emptyList(),
+                "updated", Collections.emptyList(),
+                "deleted", Collections.emptyList()
+            );
+        }
+        // Safe: table name and columns come from the static allowlist above, not user input
+        String sql = "SELECT " + meta[1] + " FROM " + meta[0]
+                   + " WHERE user_id = ? AND updated_at > ? ORDER BY updated_at";
         List<Map<String, Object>> rows;
         try {
             rows = jdbc.queryForList(sql, userId, since);

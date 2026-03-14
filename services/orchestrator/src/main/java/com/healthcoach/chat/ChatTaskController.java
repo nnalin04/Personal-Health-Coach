@@ -1,8 +1,9 @@
 package com.healthcoach.chat;
 
-import com.healthcoach.security.JwtTokenProvider;
+import com.healthcoach.security.UserPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,20 +23,18 @@ import java.util.UUID;
 @RequestMapping("/api/v1/chat")
 public class ChatTaskController {
 
-    private final JwtTokenProvider jwtUtil;
-    private final JdbcTemplate     jdbc;
+    private final JdbcTemplate jdbc;
 
-    public ChatTaskController(JwtTokenProvider jwtUtil, JdbcTemplate jdbc) {
-        this.jwtUtil = jwtUtil;
-        this.jdbc    = jdbc;
+    public ChatTaskController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
     }
 
     @GetMapping("/tasks/{taskId}")
     public ResponseEntity<Map<String, Object>> getTask(
-            @RequestHeader("Authorization") String authHeader,
-            @PathVariable("taskId")        String taskId
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable("taskId")  String taskId
     ) {
-        Long userId = jwtUtil.getUserIdFromToken(authHeader.replace("Bearer ", ""));
+        Long userId = currentUser.getId();
 
         // Validate UUID format
         try { UUID.fromString(taskId); } catch (IllegalArgumentException e) {
