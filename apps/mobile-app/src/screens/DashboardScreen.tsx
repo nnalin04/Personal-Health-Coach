@@ -51,10 +51,17 @@ export default function DashboardScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
+        {/* Header — avatar top-left navigates to Profile */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Good morning</Text>
-          <Text style={styles.date}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.greeting}>Good morning</Text>
+              <Text style={styles.date}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+            </View>
+            <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation.navigate('Profile')}>
+              <Text style={styles.avatarInitials}>NS</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Action Rings */}
@@ -103,8 +110,11 @@ const styles = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: '#0A0A0A' },
   scroll:        { padding: 20, paddingBottom: 100 },
   header:        { marginBottom: 28 },
+  headerRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greeting:      { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
   date:          { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  avatarBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' },
+  avatarInitials:{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   sectionTitle:  { fontSize: 13, fontWeight: '600', color: '#6B7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14, marginTop: 8 },
   rings:         { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 28 },
   ringCard:      { alignItems: 'center', flex: 1 },
