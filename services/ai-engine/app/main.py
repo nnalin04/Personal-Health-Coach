@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.routers.health_router import router as health_router
 from app.routers.nutrient_router import router as nutrient_router
+from app.routers.profile_update_router import router as profile_update_router
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 app.include_router(health_router)
 app.include_router(nutrient_router)
+app.include_router(profile_update_router)
 
 
 @app.get("/health")

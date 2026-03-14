@@ -45,11 +45,19 @@ interface ChatMessage {
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://healthcoach.duckdns.org/api';
 
+interface OmniChatResponse {
+  taskId: string;
+  status: 'PROCESSING' | 'COMPLETED';
+  estimatedTime?: string;
+  message?: string;   // set when status === 'COMPLETED' (e.g. profile update confirmation)
+  type?: string;      // e.g. 'PROFILE_UPDATE'
+}
+
 async function uploadToOmniChat(
   payload: { text?: string; file?: { uri: string; name: string; mimeType: string } },
   type: 'FOOD' | 'REPORT' | 'TEXT',
   chatId: string,
-): Promise<{ taskId: string; status: string; estimatedTime: string }> {
+): Promise<OmniChatResponse> {
   const form = new FormData();
   form.append('type', type);
   form.append('chatId', chatId);
@@ -72,7 +80,7 @@ export default function OmniChatScreen({ navigation }: Props) {
       id: '0',
       role: 'assistant',
       type: 'text',
-      text: "What did you eat, or how are you feeling? You can also share a food photo or upload a medical report — I'll handle the rest.",
+      text: "What did you eat, or how are you feeling? You can also share a food photo, upload a medical report, or update your profile — just say things like \"Update my weight to 75 kg\" or \"Change my region to Punjab\".",
     },
   ]);
   const [input, setInput] = useState('');
@@ -93,11 +101,12 @@ export default function OmniChatScreen({ navigation }: Props) {
 
     try {
       const result = await uploadToOmniChat({ text: trimmed }, 'TEXT', chatId);
+      const responseText = result.status === 'COMPLETED' && result.message
+        ? result.message
+        : `Got it! Task ${result.taskId} is ${result.status}. Estimated: ${result.estimatedTime}`;
       setMessages((prev) =>
         prev.map((m) =>
-          m.type === 'processing'
-            ? { ...m, type: 'ai-response', text: `Got it! Task ${result.taskId} is ${result.status}. Estimated: ${result.estimatedTime}` }
-            : m,
+          m.type === 'processing' ? { ...m, type: 'ai-response', text: responseText } : m,
         ),
       );
     } catch {

@@ -10,10 +10,13 @@ import com.healthcoach.aiclient.dto.NutrientRecommendationRequest;
 import com.healthcoach.aiclient.dto.NutrientRecommendationResponse;
 import com.healthcoach.aiclient.dto.ParseMedicalReportRequest;
 import com.healthcoach.aiclient.dto.ParseMedicalReportResponse;
+import com.healthcoach.aiclient.dto.ParseProfileUpdateRequest;
+import com.healthcoach.aiclient.dto.ParseProfileUpdateResponse;
 import com.healthcoach.aiclient.dto.ParsedLabValues;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -21,6 +24,8 @@ import org.springframework.web.client.RestTemplate;
 
 @Service
 public class AiServiceClient {
+
+    private static final Logger logger = Logger.getLogger(AiServiceClient.class.getName());
 
     private final RestTemplate restTemplate;
     private final String aiBaseUrl;
@@ -111,6 +116,25 @@ public class AiServiceClient {
             return response != null ? response : emptyRecommendationResponse();
         } catch (RestClientException ex) {
             return emptyRecommendationResponse();
+        }
+    }
+
+    /**
+     * Call AI engine to classify and parse a natural-language profile update.
+     * Returns a non-null response; isProfileUpdate=false on any failure.
+     */
+    public ParseProfileUpdateResponse parseProfileUpdate(String message) {
+        try {
+            ParseProfileUpdateRequest request = new ParseProfileUpdateRequest(message);
+            ParseProfileUpdateResponse response = restTemplate.postForObject(
+                    aiBaseUrl + "/api/v1/chat/parse-profile-update",
+                    request,
+                    ParseProfileUpdateResponse.class
+            );
+            return response != null ? response : new ParseProfileUpdateResponse(false, null, null);
+        } catch (RestClientException ex) {
+            logger.warning("Profile update parsing unavailable: " + ex.getMessage());
+            return new ParseProfileUpdateResponse(false, null, null);
         }
     }
 
