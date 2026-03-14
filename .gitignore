@@ -20,29 +20,40 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-# Java
+# Java build artifacts
 backend/target/
 backend/.mvn/
-backend/mvnw
-backend/mvnw.cmd
+services/orchestrator/target/
 
-# Flutter/Dart
+# Flutter/Dart build artifacts
 mobile/.dart_tool/
 mobile/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 mobile/.packages
 mobile/pubspec.lock
+apps/flutter-legacy/build/
+apps/flutter-legacy/.dart_tool/
+apps/flutter-legacy/.flutter-plugins
+apps/flutter-legacy/.flutter-plugins-dependencies
+
+# React Native
+apps/mobile-app/node_modules/
+
+# Release APKs (distribute via GitHub Releases or direct transfer, not git)
+releases/*.apk
+releases/*.aab
 
 # IDE
 .vscode/
 .idea/
 
-# Android Signing
+# Android Signing (never commit keystores or key.properties with real passwords)
 mobile/android/key.properties
 mobile/android/app/keystores/
 mobile/android/app/google-services.json
 mobile/android/local.properties
+apps/flutter-legacy/android/local.properties
 
 # Debug/temp screenshots and UI dumps (emulator testing artifacts)
 mobile/*.png
