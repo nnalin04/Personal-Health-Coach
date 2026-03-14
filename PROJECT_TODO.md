@@ -171,22 +171,27 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] `POST /api/v1/chat/upload` OmniChat endpoint in Spring Boot — returns taskId + "PROCESSING"
 - [x] `spring-boot-starter-amqp` + `spring-boot-starter-websocket` added to pom.xml
 - [x] `aio-pika`, `langchain`, `pgvector`, `psycopg2-binary` added to AI service requirements.txt
-- [ ] WebSocket notification back to mobile on task completion — Phase 3b
+- [x] WebSocket notification back to mobile on task completion — Phase 3b
+      → WebSocketConfig.java + WebSocketSecurityConfig.java (JWT ChannelInterceptor) + TaskCompletionListener.java
+      → useTaskWebSocket.ts hook + OmniChatScreen polling/WS dual mode
 - [ ] GCS file upload for food images and PDFs — Phase 3b
 
 ### Phase 4 — Clinical OCR + RAG (Partially Complete)
-- [ ] Google Cloud Document AI integration for medical PDF parsing
+- [ ] Medical PDF parsing via Gemini Vision (replaces Document AI)
 - [x] pgvector RAG correlation engine
       → services/ai-engine/app/services/rag_service.py: embed→retrieve→synthesise pipeline
       → smart_router.py TEXT branch now calls RAG (was placeholder)
 - [x] Knowledge Base seeding with ICMR dietary guidelines + FSSAI RDA data
       → scripts/seed_knowledge_base.py (17 chunks: iron, vitamin D, calcium, B12, protein, fibre, omega-3, diabetes, hypertension, weight, gut health, hydration, pregnancy, thyroid)
-- [ ] WebSocket bridge (STOMP over WS) for real-time task notifications
-- [ ] Graceful fallback conversation when food confidence < 0.80
+- [x] WebSocket bridge (STOMP over WS) for real-time task notifications
+      → STOMP ChannelInterceptor JWT auth; /topic/tasks/{userId} ownership enforced
+- [x] Graceful fallback conversation when food confidence < 0.80
+      → smart_router.py: PARTIAL status + re-ask message when avg confidence < 80%
 
 ### Phase 5 — Compliance + Regional Refinement (Pending)
-- [ ] DPDP Act compliance: AES-256 `@ColumnTransformer` on sensitive medical fields
+- [ ] DPDP Act compliance: AES-256-GCM application-level encryption on sensitive medical fields
 - [ ] Consent management: `consent_version` + `withdrawal_requested` flow
 - [ ] 72-hour breach notification documentation
 - [ ] Quick-commerce receipt parsing (Blinkit/Instamart OCR)
-- [ ] Full security audit against Health OS threat model
+- [x] Full security audit against Health OS threat model
+      → 2 Critical + 5 High + 4 Medium addressed (WebSocket auth, SQL injection, JWT extraction, rate limits, MIME validation)

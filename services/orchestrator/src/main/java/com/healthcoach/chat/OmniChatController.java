@@ -4,6 +4,7 @@ import com.healthcoach.aiclient.AiServiceClient;
 import com.healthcoach.aiclient.dto.ParseProfileUpdateResponse;
 import com.healthcoach.messaging.TaskPublisher;
 import com.healthcoach.security.UserPrincipal;
+import com.healthcoach.storage.GcsStorageService;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserService;
 import com.healthcoach.user.dto.UpdateProfileRequest;
@@ -26,9 +27,9 @@ import java.util.UUID;
  * and publishes an async task to RabbitMQ. Returns taskId immediately so the
  * mobile app can poll for the result.
  *
- * - FOOD: file bytes encoded as base64 and embedded in the RabbitMQ message.
- *         (GCS claim-check upload is Phase 3b for larger files.)
- * - REPORT: PDF stored via placeholder URL until GCS integration is complete.
+ * - FOOD: uploaded to GCS (claim-check); GCS URI passed in RabbitMQ message.
+ *         Falls back to base64 embedding when GCS is not configured (local dev).
+ * - REPORT: PDF uploaded to GCS; URI passed in RabbitMQ message.
  * - TEXT: check for profile-update intent first (synchronous); fall back to RAG.
  *
  * Every task is persisted to omni_chat_tasks for status polling.
@@ -40,21 +41,24 @@ public class OmniChatController {
     private static final Set<String> ALLOWED_IMAGE_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/heic");
 
-    private final TaskPublisher   taskPublisher;
-    private final AiServiceClient aiServiceClient;
-    private final UserService     userService;
-    private final JdbcTemplate    jdbc;
+    private final TaskPublisher      taskPublisher;
+    private final AiServiceClient    aiServiceClient;
+    private final UserService        userService;
+    private final JdbcTemplate       jdbc;
+    private final GcsStorageService  gcsStorage;
 
     public OmniChatController(
-            TaskPublisher   taskPublisher,
-            AiServiceClient aiServiceClient,
-            UserService     userService,
-            JdbcTemplate    jdbc
+            TaskPublisher      taskPublisher,
+            AiServiceClient    aiServiceClient,
+            UserService        userService,
+            JdbcTemplate       jdbc,
+            GcsStorageService  gcsStorage
     ) {
         this.taskPublisher   = taskPublisher;
         this.aiServiceClient = aiServiceClient;
         this.userService     = userService;
         this.jdbc            = jdbc;
+        this.gcsStorage      = gcsStorage;
     }
 
     @PostMapping("/upload")
@@ -81,8 +85,10 @@ public class OmniChatController {
                             Map.of("error", "Only JPEG, PNG, WEBP, and HEIC images are accepted"));
                     }
                 }
-                String imageB64 = encodeFile(file);
-                taskPublisher.publishFoodVision(taskId, userId, chatId, imageB64, userContext);
+                // Upload to GCS (claim-check); fall back to base64 if GCS not configured
+                String gcsUri = gcsStorage.uploadFoodImage(file, userId);
+                String imagePayload = (gcsUri != null) ? gcsUri : encodeFile(file);
+                taskPublisher.publishFoodVision(taskId, userId, chatId, imagePayload, userContext);
                 estimatedSecs = 5;
                 insertTask(taskId, userId, chatId, "FOOD", estimatedSecs);
             }
@@ -94,8 +100,9 @@ public class OmniChatController {
                             Map.of("error", "Only PDF documents are accepted for medical reports"));
                     }
                 }
-                // GCS upload is Phase 3b — placeholder URL for now
-                String documentUrl = "pending://" + taskId;
+                // Upload to GCS; fall back to base64 if GCS not configured
+                String gcsUri = gcsStorage.uploadMedicalPdf(file, userId);
+                String documentUrl = (gcsUri != null) ? gcsUri : encodeFile(file);
                 taskPublisher.publishMedicalOcr(taskId, userId, chatId, documentUrl);
                 estimatedSecs = 15;
                 insertTask(taskId, userId, chatId, "REPORT", estimatedSecs);
@@ -115,7 +122,8 @@ public class OmniChatController {
                         ));
                     }
                 }
-                taskPublisher.publishRagInsight(userId, "text_query", java.util.List.of());
+                // Pass the correct taskId + message so WS notification lands on the right poll slot
+                taskPublisher.publishTextQuery(taskId, userId, message, userContext);
                 estimatedSecs = 3;
                 insertTask(taskId, userId, chatId, "TEXT", estimatedSecs);
             }

@@ -24,7 +24,8 @@ class NutrientAnalysisService:
         self.client = GeminiClient()
 
     def analyze_food(self, image_base64: str | None, description: str | None,
-                     image_mime_type: str, user_context: dict) -> FoodAnalysisResponse:
+                     image_mime_type: str, user_context: dict,
+                     image_bytes: bytes | None = None) -> FoodAnalysisResponse:
         region = user_context.get("region", "India")
         cuisine = user_context.get("cuisine_style", "mixed")
         restrictions = user_context.get("dietary_restrictions", "none")
@@ -58,13 +59,16 @@ Return JSON in this exact format:
 }}"""
 
         try:
-            if image_base64:
-                # Vision call: pass image as content
+            if image_bytes:
+                # GCS path: raw bytes from cloud storage
+                image_part = {"mime_type": image_mime_type, "data": image_bytes}
+                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
+            elif image_base64:
+                # Local-dev path: base64-encoded bytes
                 image_part = {"mime_type": image_mime_type, "data": image_base64}
-                contents = [image_part]
-                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, contents)
+                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
             else:
-                # Text-only call
+                # Text-only call (description only, no image)
                 result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt)
 
             foods = [IdentifiedFood(**f) for f in result.get("foods", [])]

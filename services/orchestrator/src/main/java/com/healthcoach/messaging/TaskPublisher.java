@@ -67,11 +67,33 @@ public class TaskPublisher {
     }
 
     /**
-     * Publish a RAG insight task — triggers LangChain + pgvector correlation.
-     * Called automatically after meal_logged or report_processed events.
+     * Publish a RAG text-query task from OmniChat.
+     * Uses the same taskId that was already persisted to omni_chat_tasks so the
+     * WS notification lands on the correct polling slot in the mobile app.
      *
-     * @param userId           The authenticated user's ID
-     * @param triggerEvent     "meal_logged" | "report_processed" | "daily_summary"
+     * @param taskId     UUID already persisted to omni_chat_tasks
+     * @param userId     The authenticated user's ID
+     * @param message    Raw user text query
+     * @param userContext region, cuisineStyle, dietaryRestrictions
+     */
+    public void publishTextQuery(UUID taskId, Long userId, String message,
+                                 Map<String, String> userContext) {
+        Map<String, Object> payload = Map.of(
+            "taskId",      taskId.toString(),
+            "userId",      userId.toString(),
+            "message",     message != null ? message : "",
+            "userContext", userContext,
+            "timestamp",   Instant.now().toEpochMilli()
+        );
+        rabbitTemplate.convertAndSend(RabbitMqConfig.EXCHANGE, RabbitMqConfig.RAG_KEY, payload);
+    }
+
+    /**
+     * Publish a RAG insight task triggered by internal events (not user queries).
+     * Generates its own taskId since there is no omni_chat_tasks row for these.
+     *
+     * @param userId            The authenticated user's ID
+     * @param triggerEvent      "meal_logged" | "report_processed" | "daily_summary"
      * @param deficiencyMarkers nutrients currently below threshold
      */
     public void publishRagInsight(Long userId, String triggerEvent, java.util.List<String> deficiencyMarkers) {
