@@ -102,26 +102,51 @@ def route_task(
 
     if input_type == InputType.FOOD:
         service = NutrientAnalysisService()
-        image_b64 = payload.get("image_base64")
-        description = payload.get("description")
+        # The RabbitMQ payload key is "imageUrl" (holds base64 from OmniChatController)
+        image_b64   = payload.get("imageUrl") or payload.get("image_base64")
+        description = payload.get("description") or payload.get("chatId", "")
         result = service.analyze_food(
             image_base64=image_b64,
             description=description,
             image_mime_type=payload.get("mime_type", "image/jpeg"),
             user_context=user_context,
         )
+
+        # Compute average per-food confidence (Gemini returns 0-1 per identified item)
+        confidences = [f.confidence for f in (result.foods or []) if f.confidence is not None]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.5
+
+        meal_log = {
+            "dishName":   ", ".join(f.name for f in result.foods) if result.foods else (description or "Unknown food"),
+            "calories":   result.total_calories,
+            "proteinG":   result.protein_g,
+            "carbsG":     result.carbs_g,
+            "fatsG":      result.fats_g,
+            "confidence": result.confidence_note,
+        }
+
+        # Low-confidence fallback — ask user to confirm before logging
+        if avg_confidence < 0.80:
+            food_label = meal_log["dishName"] or "this food"
+            return {
+                "type":       "FOOD",
+                "taskId":     task_id,
+                "status":     "PARTIAL",
+                "message":    (
+                    f"I'm not fully confident about '{food_label}' "
+                    f"(confidence: {avg_confidence:.0%}). "
+                    "Could you add more detail — dish name, ingredients, or portion size? "
+                    "I'll re-analyse once you confirm."
+                ),
+                "mealLog":    meal_log,
+                "confidence": avg_confidence,
+            }
+
         return {
-            "type": "FOOD",
-            "taskId": task_id,
-            "status": "COMPLETED",
-            "mealLog": {
-                "dishName":    description or "Unknown food",
-                "calories":    result.total_calories,
-                "proteinG":    result.protein_g,
-                "carbsG":      result.carbs_g,
-                "fatsG":       result.fats_g,
-                "confidence":  result.confidence_note,
-            },
+            "type":    "FOOD",
+            "taskId":  task_id,
+            "status":  "COMPLETED",
+            "mealLog": meal_log,
         }
 
     if input_type == InputType.REPORT:

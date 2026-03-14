@@ -95,8 +95,16 @@ public class SyncController {
                     int[] r = upsertWorkoutLogs(userId, created, updated, deleted);
                     applied += r[0]; failed += r[1];
                 }
+                case "body_metrics" -> {
+                    int[] r = upsertBodyMetrics(userId, created, updated, deleted);
+                    applied += r[0]; failed += r[1];
+                }
+                case "step_logs" -> {
+                    int[] r = upsertStepLogs(userId, created, updated, deleted);
+                    applied += r[0]; failed += r[1];
+                }
                 default -> {
-                    // Other tables (body_metrics, step_logs) — Phase 2b
+                    // Unknown table — acknowledge without persisting
                     applied += created.size() + updated.size() + deleted.size();
                 }
             }
@@ -196,6 +204,93 @@ public class SyncController {
         for (Map<String, Object> r : deleted) {
             try {
                 jdbc.update("DELETE FROM workout_logs WHERE id = ? AND user_id = ?", str(r, "id"), userId);
+                ok++;
+            } catch (Exception e) { err++; }
+        }
+        return new int[]{ok, err};
+    }
+
+    private int[] upsertBodyMetrics(
+            Long userId,
+            List<Map<String, Object>> created,
+            List<Map<String, Object>> updated,
+            List<Map<String, Object>> deleted
+    ) {
+        int ok = 0, err = 0;
+        List<Map<String, Object>> toUpsert = new ArrayList<>(created);
+        toUpsert.addAll(updated);
+
+        for (Map<String, Object> r : toUpsert) {
+            try {
+                jdbc.update(
+                    """
+                    INSERT INTO body_metrics (id, user_id, weight_kg, height_cm, bmi, body_fat_percentage, recorded_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                      weight_kg          = EXCLUDED.weight_kg,
+                      height_cm          = EXCLUDED.height_cm,
+                      bmi                = EXCLUDED.bmi,
+                      body_fat_percentage = EXCLUDED.body_fat_percentage,
+                      updated_at         = NOW()
+                    WHERE body_metrics.user_id = ?
+                    """,
+                    str(r, "id"),
+                    userId,
+                    dbl(r, "weightKg"),
+                    dbl(r, "heightCm"),
+                    dbl(r, "bmi"),
+                    dbl(r, "bodyFatPct"),
+                    str(r, "recordedAt"),
+                    userId
+                );
+                ok++;
+            } catch (Exception e) { err++; }
+        }
+
+        for (Map<String, Object> r : deleted) {
+            try {
+                jdbc.update("DELETE FROM body_metrics WHERE id = ? AND user_id = ?", str(r, "id"), userId);
+                ok++;
+            } catch (Exception e) { err++; }
+        }
+        return new int[]{ok, err};
+    }
+
+    private int[] upsertStepLogs(
+            Long userId,
+            List<Map<String, Object>> created,
+            List<Map<String, Object>> updated,
+            List<Map<String, Object>> deleted
+    ) {
+        int ok = 0, err = 0;
+        List<Map<String, Object>> toUpsert = new ArrayList<>(created);
+        toUpsert.addAll(updated);
+
+        for (Map<String, Object> r : toUpsert) {
+            try {
+                jdbc.update(
+                    """
+                    INSERT INTO step_logs (id, user_id, steps, date, updated_at)
+                    VALUES (?, ?, ?, COALESCE(?, CURRENT_DATE), NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                      steps      = EXCLUDED.steps,
+                      date       = EXCLUDED.date,
+                      updated_at = NOW()
+                    WHERE step_logs.user_id = ?
+                    """,
+                    str(r, "id"),
+                    userId,
+                    num(r, "steps"),
+                    str(r, "date"),
+                    userId
+                );
+                ok++;
+            } catch (Exception e) { err++; }
+        }
+
+        for (Map<String, Object> r : deleted) {
+            try {
+                jdbc.update("DELETE FROM step_logs WHERE id = ? AND user_id = ?", str(r, "id"), userId);
                 ok++;
             } catch (Exception e) { err++; }
         }
