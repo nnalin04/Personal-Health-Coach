@@ -157,9 +157,12 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Install WatermelonDB + Zustand + @react-navigation
 - [x] 3-page minimalist UI: OnboardingScreen, DashboardScreen, OmniChatScreen
 - [x] `POST /api/v1/sync/pull` and `POST /api/v1/sync/push` WatermelonDB sync endpoints
-- [ ] WatermelonDB schema definition (Model classes for MealLog, BloodMetrics, etc.) — Phase 2b
-- [ ] Full push phase upsert logic in SyncController — Phase 2b
-- [ ] TasteProfile loading from DB for OmniChat user context — Phase 2b
+- [x] WatermelonDB schema definition (Model classes for MealLog, WorkoutLog, BodyMetrics, StepLog) — Phase 2b
+      → apps/mobile-app/src/db/schema.ts + models/ + index.ts + services/syncService.ts
+- [x] Full push phase upsert logic in SyncController — Phase 2b
+      → INSERT ON CONFLICT (id) DO UPDATE for food_logs + workout_logs; body_metrics/step_logs Phase 2c
+- [x] TasteProfile loading from DB for OmniChat user context — Phase 2b
+      → buildUserContext() prefers taste_profiles table (richer: spice, grains, goal) over users table fallback
 
 ### Phase 3 — AI Intelligence + Smart Routing ✅
 - [x] Smart Router in FastAPI (`app/routers/smart_router.py`) — classifies FOOD | REPORT | TEXT
@@ -171,10 +174,13 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [ ] WebSocket notification back to mobile on task completion — Phase 3b
 - [ ] GCS file upload for food images and PDFs — Phase 3b
 
-### Phase 4 — Clinical OCR + RAG (Pending)
+### Phase 4 — Clinical OCR + RAG (Partially Complete)
 - [ ] Google Cloud Document AI integration for medical PDF parsing
-- [ ] LangChain + pgvector RAG correlation engine
-- [ ] Knowledge Base seeding with ICMR dietary guidelines + FSSAI RDA data
+- [x] pgvector RAG correlation engine
+      → services/ai-engine/app/services/rag_service.py: embed→retrieve→synthesise pipeline
+      → smart_router.py TEXT branch now calls RAG (was placeholder)
+- [x] Knowledge Base seeding with ICMR dietary guidelines + FSSAI RDA data
+      → scripts/seed_knowledge_base.py (17 chunks: iron, vitamin D, calcium, B12, protein, fibre, omega-3, diabetes, hypertension, weight, gut health, hydration, pregnancy, thyroid)
 - [ ] WebSocket bridge (STOMP over WS) for real-time task notifications
 - [ ] Graceful fallback conversation when food confidence < 0.80
 

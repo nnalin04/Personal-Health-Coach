@@ -94,9 +94,7 @@ def route_task(
     and pushed back to the Orchestrator.
     """
     from app.services.nutrient_analysis_service import NutrientAnalysisService
-    # Medical parser and RAG services to be wired in Phase 3/4
-    # from app.services.medical_parser_service import MedicalParserService
-    # from app.services.rag_service import RagService
+    from app.services.rag_service import answer_query
 
     logger.info("Routing task %s type=%s user=%s", task_id, task_type, user_id)
 
@@ -135,10 +133,22 @@ def route_task(
             "message": "Medical OCR pipeline coming in Phase 4",
         }
 
-    # TEXT / RAG
+    # TEXT / RAG — full pipeline now live
+    query = payload.get("message", payload.get("text", ""))
+    if not query:
+        return {
+            "type":    "TEXT",
+            "taskId":  task_id,
+            "status":  "COMPLETED",
+            "message": "Please send a health question and I'll do my best to help!",
+        }
+
+    rag_result = answer_query(query=query, user_context=user_context)
     return {
-        "type":    "TEXT",
-        "taskId":  task_id,
-        "status":  "PARTIAL",
-        "message": "RAG correlation engine coming in Phase 4",
+        "type":       "TEXT",
+        "taskId":     task_id,
+        "status":     "COMPLETED",
+        "message":    rag_result["answer"],
+        "sources":    rag_result.get("sources", []),
+        "chunksUsed": rag_result.get("chunks_used", 0),
     }

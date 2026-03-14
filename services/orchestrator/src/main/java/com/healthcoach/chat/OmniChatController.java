@@ -114,18 +114,52 @@ public class OmniChatController {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    /** Load user's region, cuisine style, dietary restrictions from users table. */
+    /**
+     * Load user context for AI personalisation.
+     * Prefers taste_profiles (richer) over the users table fallback.
+     * Gracefully falls back to users table if taste_profiles row is absent (V5 not yet applied).
+     */
     private Map<String, String> buildUserContext(Long userId) {
+        // Try taste_profiles first (richer context from V5 migration)
+        try {
+            var rows = jdbc.queryForList(
+                "SELECT region, cuisine_style, dietary_restrictions, health_goal, " +
+                "spice_preference, staple_grains FROM taste_profiles WHERE user_id = ?",
+                userId
+            );
+            if (!rows.isEmpty()) {
+                var tp = rows.get(0);
+                return Map.of(
+                    "region",              nullOr(str(tp, "region"),               "India"),
+                    "cuisineStyle",        nullOr(str(tp, "cuisine_style"),        "mixed"),
+                    "dietaryRestrictions", nullOr(str(tp, "dietary_restrictions"), "none"),
+                    "healthGoal",          nullOr(str(tp, "health_goal"),          "general wellness"),
+                    "spicePreference",     nullOr(str(tp, "spice_preference"),     "medium"),
+                    "stapleGrains",        nullOr(str(tp, "staple_grains"),        "rice/wheat")
+                );
+            }
+        } catch (Exception ignored) { /* table not yet created — fall through */ }
+
+        // Fallback: users table
         try {
             User user = userService.getById(userId);
             return Map.of(
                 "region",              nullOr(user.getRegion(),              "India"),
                 "cuisineStyle",        nullOr(user.getCuisineStyle(),        "mixed"),
-                "dietaryRestrictions", nullOr(user.getDietaryRestrictions(), "none")
+                "dietaryRestrictions", nullOr(user.getDietaryRestrictions(), "none"),
+                "healthGoal",          "general wellness",
+                "spicePreference",     "medium",
+                "stapleGrains",        "rice/wheat"
             );
         } catch (Exception e) {
-            return Map.of("region", "India", "cuisineStyle", "mixed", "dietaryRestrictions", "none");
+            return Map.of("region", "India", "cuisineStyle", "mixed", "dietaryRestrictions", "none",
+                          "healthGoal", "general wellness", "spicePreference", "medium", "stapleGrains", "rice/wheat");
         }
+    }
+
+    private static String str(java.util.Map<String, Object> m, String k) {
+        Object v = m.get(k);
+        return v != null ? v.toString() : null;
     }
 
     private static String nullOr(String value, String fallback) {
