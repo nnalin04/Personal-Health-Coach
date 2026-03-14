@@ -174,10 +174,12 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] WebSocket notification back to mobile on task completion — Phase 3b
       → WebSocketConfig.java + WebSocketSecurityConfig.java (JWT ChannelInterceptor) + TaskCompletionListener.java
       → useTaskWebSocket.ts hook + OmniChatScreen polling/WS dual mode
-- [ ] GCS file upload for food images and PDFs — Phase 3b
+- [x] GCS file upload for food images and PDFs — Phase 3b
+      → GcsStorageService.java uploads to gs://bucket/food|medical/{userId}/{uuid}; graceful null fallback when GCS_BUCKET_NAME blank.
 
 ### Phase 4 — Clinical OCR + RAG (Partially Complete)
-- [ ] Medical PDF parsing via Gemini Vision (replaces Document AI)
+- [x] Medical PDF parsing via Gemini Vision (replaces Document AI)
+      → services/ai-engine/app/services/medical_parser_service.py: extracts CBC/lipid/thyroid/metabolic values; culturally-aware dietary recommendations.
 - [x] pgvector RAG correlation engine
       → services/ai-engine/app/services/rag_service.py: embed→retrieve→synthesise pipeline
       → smart_router.py TEXT branch now calls RAG (was placeholder)
@@ -188,10 +190,14 @@ This checklist is focused on one goal: a user with the APK can use the full AI H
 - [x] Graceful fallback conversation when food confidence < 0.80
       → smart_router.py: PARTIAL status + re-ask message when avg confidence < 80%
 
-### Phase 5 — Compliance + Regional Refinement (Pending)
-- [ ] DPDP Act compliance: AES-256-GCM application-level encryption on sensitive medical fields
-- [ ] Consent management: `consent_version` + `withdrawal_requested` flow
-- [ ] 72-hour breach notification documentation
-- [ ] Quick-commerce receipt parsing (Blinkit/Instamart OCR)
+### Phase 5 — Compliance + Regional Refinement ✅
+- [x] DPDP Act compliance: AES-256-GCM application-level encryption on sensitive medical fields
+      → EncryptionService.java (IV-prepended AES-256-GCM); V6__DPDP_Compliance.sql adds raw_text_enc + lab_values_enc columns.
+- [x] Consent management: `consent_version` + `withdrawal_requested` flow
+      → ConsentService.java + ConsentController.java: GET/POST /api/users/me/consent; consent_records audit table.
+- [x] 72-hour breach notification documentation
+      → docs/breach_notification_procedure.md: DPDP Act 2023 Section 8(6) runbook.
+- [x] Quick-commerce receipt parsing (Blinkit/Instamart OCR)
+      → services/ai-engine/app/services/receipt_parser_service.py: Gemini Vision on receipts; bulk food-log ready output.
 - [x] Full security audit against Health OS threat model
       → 2 Critical + 5 High + 4 Medium addressed (WebSocket auth, SQL injection, JWT extraction, rate limits, MIME validation)
