@@ -1,6 +1,7 @@
 import json
 import logging
-from app.ai.gemini_client import GeminiClient
+from pydantic import ValidationError
+from app.ai.gemini_client import GeminiClient, GeminiError
 from app.schemas.health import AnalyzeHealthResponse
 
 logger = logging.getLogger(__name__)
@@ -13,15 +14,13 @@ class RecommendationService:
     def analyze_health(self, summary: dict) -> AnalyzeHealthResponse:
         try:
             return self._gemini_analysis(summary)
-        except Exception:
-            logger.exception("Gemini health analysis failed — using fallback")
+        except (GeminiError, ValidationError) as exc:
+            logger.warning("Gemini health analysis failed (%s) — using fallback", exc)
             return self._fallback_analysis(summary)
 
     def _gemini_analysis(self, summary: dict) -> AnalyzeHealthResponse:
         goal = summary.get("profile", {}).get("goal", "general health")
         risk_flags = summary.get("risk_flags", [])
-        
-        # Simple knowledge retrieval based on risk/goals
         retrieved_context = self._retrieve_knowledge(goal, risk_flags)
 
         system_prompt = (
@@ -33,19 +32,15 @@ class RecommendationService:
             f"User Goal: {goal}\n"
             f"Scientific Context: {retrieved_context}\n"
             "Health Summary JSON: " + json.dumps(summary) + "\n\n"
-            "Generate concise guidance with keys: dietSuggestions, trainingSuggestions, recoverySuggestions, medicalAwarenessNotes, disclaimer."
+            "Generate concise guidance with keys: dietSuggestions, trainingSuggestions, "
+            "recoverySuggestions, medicalAwarenessNotes, disclaimer."
         )
-        output = self.gemini_client.generate_json(system_prompt, user_prompt)
-        return AnalyzeHealthResponse(
-            dietSuggestions=output.get("dietSuggestions", []),
-            trainingSuggestions=output.get("trainingSuggestions", []),
-            recoverySuggestions=output.get("recoverySuggestions", []),
-            medicalAwarenessNotes=output.get("medicalAwarenessNotes", []),
-            disclaimer=output.get(
-                "disclaimer",
-                "This is educational guidance only and not a medical diagnosis.",
-            ),
+        output = self.gemini_client.generate_json(
+            system_prompt, user_prompt, temperature=0.2
         )
+        # model_validate raises ValidationError if Gemini returns unexpected schema —
+        # caller catches it and falls back rather than returning a silently empty response.
+        return AnalyzeHealthResponse.model_validate(output)
 
     def _retrieve_knowledge(self, goal: str, risk_flags: list[str]) -> str:
         # Placeholder for RAG retrieval logic

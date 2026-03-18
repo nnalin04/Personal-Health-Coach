@@ -5,6 +5,9 @@ import com.healthcoach.user.UserService;
 import com.healthcoach.workout.dto.WorkoutLogRequest;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -30,12 +33,20 @@ public class WorkoutService {
         return workoutLogRepository.save(log);
     }
 
-    public List<WorkoutLog> getByUser(Long userId, LocalDate from, LocalDate to) {
+    public Page<WorkoutLog> getByUser(Long userId, LocalDate from, LocalDate to, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "date"));
         if (from == null && to == null) {
-            return workoutLogRepository.findByUserIdOrderByDateDesc(userId);
+            return workoutLogRepository.findByUserId(userId, pageable);
         }
         LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
-        LocalDate end = to != null ? to : LocalDate.now().plusDays(1);
+        LocalDate end   = to   != null ? to   : LocalDate.now().plusDays(1);
+        return workoutLogRepository.findByUserIdAndDateBetween(userId, start, end, pageable);
+    }
+
+    /** Unbounded list for HealthSummaryService (already bounded by date range). */
+    public List<WorkoutLog> getByUserUnbounded(Long userId, LocalDate from, LocalDate to) {
+        LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
+        LocalDate end   = to   != null ? to   : LocalDate.now().plusDays(1);
         return workoutLogRepository.findByUserIdAndDateBetween(userId, start, end);
     }
 }

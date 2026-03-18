@@ -59,11 +59,22 @@ public class SecurityConfig {
                                 .policyDirectives("default-src 'self'; frame-ancestors 'none'; form-action 'self'"))
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/actuator/health", "/error", "/privacy", "/privacy.html").permitAll()
+                        .requestMatchers(
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/google",
+                                "/api/auth/refresh",   // refresh token — public (token is the credential)
+                                "/actuator/health",
+                                "/error",
+                                "/privacy",
+                                "/privacy.html"
+                        ).permitAll()
                         .anyRequest().authenticated());
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(new RateLimitingFilter(), JwtAuthenticationFilter.class);
+        // CorrelationIdFilter runs first — all downstream log lines carry correlationId
+        http.addFilterBefore(new CorrelationIdFilter(), RateLimitingFilter.class);
         return http.build();
     }
 
@@ -72,7 +83,8 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Correlation-ID"));
+        config.setExposedHeaders(List.of("X-Correlation-ID"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

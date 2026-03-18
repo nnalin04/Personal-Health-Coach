@@ -35,6 +35,8 @@ interface AuthState {
   register: (email: string, password: string) => Promise<void>;
   markOnboardingDone: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUser: (user: Partial<UserProfile>) => Promise<void>;
+  updateToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -105,6 +107,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // silently skip if network unavailable
     }
+  },
+
+  updateUser: async (user: Partial<UserProfile>) => {
+    const currentUser = get().user;
+    const updatedUser = { ...currentUser, ...user } as UserProfile;
+    await SecureStore.setItemAsync('auth_user', JSON.stringify(updatedUser));
+    set({ user: updatedUser });
+  },
+
+  updateToken: async (token: string) => {
+    await SecureStore.setItemAsync('auth_token', token);
+    set({ token });
   },
 
   logout: async () => {

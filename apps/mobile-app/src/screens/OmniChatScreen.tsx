@@ -1,18 +1,3 @@
-/**
- * Page 3 — Omni-Chat Interface
- *
- * The primary input engine for the Health OS.
- * Universal '+' button supports:
- *   - Text messages  (natural language food/symptom logging + profile updates)
- *   - Food images    (routed → Gemini Vision pipeline)
- *   - Medical PDFs   (routed → Document AI OCR pipeline)
- *
- * Task result delivery (in priority order):
- *   1. WebSocket (STOMP) — instant notification from AI Engine via Spring Boot
- *   2. Polling fallback  — GET /api/v1/chat/tasks/{taskId} every 3 s (max 60 s)
- *
- * For PROFILE_UPDATE (synchronous) — shows the AI confirmation inline.
- */
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -34,6 +19,7 @@ import { AppStackParamList } from '../navigation/AppNavigator';
 import apiClient from '../services/apiClient';
 import { useAuthStore } from '../store/authStore';
 import { useTaskWebSocket, TaskCompletionMessage } from '../hooks/useTaskWebSocket';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 type Props = { navigation: StackNavigationProp<AppStackParamList, 'OmniChat'> };
 
@@ -119,7 +105,7 @@ export default function OmniChatScreen({ navigation }: Props) {
 
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: '0', role: 'assistant', type: 'text',
-    text: "What did you eat, or how are you feeling? You can share a food photo, upload a medical report, or update your profile — try \"Update my weight to 75 kg\" or \"Change my region to Punjab\".",
+    text: "Hi! What did you eat today? You can share a food photo, upload a medical report, or just talk.",
   }]);
   const [input, setInput]       = useState('');
   const [wsStatus, setWsStatus] = useState<'connecting' | 'live' | 'polling'>('connecting');
@@ -180,19 +166,19 @@ export default function OmniChatScreen({ navigation }: Props) {
 
   // ── Send text ──────────────────────────────────────────────────────────────
 
-  const handleSendText = async () => {
-    const trimmed = input.trim();
+  const handleSendText = async (textOverride?: string) => {
+    const textToSend = textOverride || input;
+    const trimmed = textToSend.trim();
     if (!trimmed) return;
     setInput('');
     addMessage({ role: 'user',      type: 'text',      text: trimmed });
-    addMessage({ role: 'assistant', type: 'processing', text: '⏳ Thinking...' });
+    addMessage({ role: 'assistant', type: 'processing', text: 'Analysing...' });
 
     try {
       const result = await uploadToOmniChat({ text: trimmed }, 'TEXT', chatId);
       if (result.status === 'COMPLETED' && result.message) {
         replaceProcessing(result.message);
       } else {
-        replaceProcessing('⏳ Working on it...');
         await waitForResult(result.taskId);
       }
     } catch {
@@ -223,14 +209,13 @@ export default function OmniChatScreen({ navigation }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (result.canceled) return;
     const asset = result.assets[0];
-    addMessage({ role: 'user',      type: 'food-image', text: '📷 Food photo attached' });
-    addMessage({ role: 'assistant', type: 'processing',  text: '🔍 Identifying food and estimating macros...' });
+    addMessage({ role: 'user',      type: 'food-image', text: '📷 Food photo' });
+    addMessage({ role: 'assistant', type: 'processing',  text: 'Analysing photo...' });
     try {
       const upload = await uploadToOmniChat(
         { file: { uri: asset.uri, name: asset.fileName ?? 'food.jpg', mimeType: 'image/jpeg' } },
         'FOOD', chatId,
       );
-      replaceProcessing('⏳ Analysing your photo...');
       await waitForResult(upload.taskId);
     } catch {
       replaceProcessing('⚠️ Upload failed. Try again.');
@@ -241,14 +226,13 @@ export default function OmniChatScreen({ navigation }: Props) {
     const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf' });
     if (result.canceled) return;
     const asset = result.assets[0];
-    addMessage({ role: 'user',      type: 'medical-pdf', text: `📄 Medical report: ${asset.name}` });
-    addMessage({ role: 'assistant', type: 'processing',   text: '🏥 Extracting lab values from your report...' });
+    addMessage({ role: 'user',      type: 'medical-pdf', text: `📄 ${asset.name}` });
+    addMessage({ role: 'assistant', type: 'processing',   text: 'Processing report...' });
     try {
       const upload = await uploadToOmniChat(
         { file: { uri: asset.uri, name: asset.name, mimeType: 'application/pdf' } },
         'REPORT', chatId,
       );
-      replaceProcessing('⏳ Processing your report...');
       await waitForResult(upload.taskId);
     } catch {
       replaceProcessing('⚠️ Upload failed. Try again.');
@@ -256,17 +240,22 @@ export default function OmniChatScreen({ navigation }: Props) {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  
+  const displayName = user?.email ? user.email.split('@')[0] : 'User';
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Dashboard</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Health OS</Text>
-        <View style={styles.statusPill}>
+      {/* TopAppBar */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={24} color="#9CA3AF" />
+          </TouchableOpacity>
+          <Text style={styles.headerSubtitle}>Dashboard</Text>
+        </View>
+        <Text style={styles.headerTitle}>Health OS</Text>
+        <View style={styles.headerRight}>
           <View style={[styles.statusDot, wsConnected ? styles.dotLive : styles.dotPoll]} />
-          <Text style={styles.statusText}>{wsConnected ? 'Live' : 'Poll'}</Text>
         </View>
       </View>
 
@@ -277,32 +266,80 @@ export default function OmniChatScreen({ navigation }: Props) {
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.chatList}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-          renderItem={({ item }) => (
-            <View style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-              <Text style={[styles.bubbleText, item.role === 'user' ? styles.userText : styles.aiText]}>
-                {item.text}
-              </Text>
+          renderItem={({ item, index }) => (
+            <View>
+              {item.role === 'assistant' ? (
+                <View style={[styles.messageRow, { justifyContent: 'flex-start' }]}>
+                  <View style={styles.aiAvatar}>
+                    <MaterialIcons name="smart-toy" size={20} color="#2463eb" />
+                  </View>
+                  <View style={styles.aiMessageContainer}>
+                    <Text style={styles.aiMessageSenderText}>HEALTH AI</Text>
+                    <View style={styles.aiBubble}>
+                      <Text style={[styles.bubbleText, item.type === 'processing' && styles.processingText]}>
+                        {item.text}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.messageRow, { justifyContent: 'flex-end' }]}>
+                  <View style={styles.userMessageContainer}>
+                    <Text style={styles.userMessageSenderText}>{displayName.toUpperCase()}</Text>
+                    <View style={styles.userBubble}>
+                      <Text style={[styles.bubbleText, { color: '#FFFFFF' }]}>
+                        {item.text}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.userAvatar}>
+                    <Text style={styles.userAvatarText}>{displayName.substring(0, 1).toUpperCase()}</Text>
+                  </View>
+                </View>
+              )}
+              
+              {/* Show suggestions after the first AI message */}
+              {index === 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <TouchableOpacity style={styles.suggestionBtn} onPress={() => handleSendText('Log breakfast')}>
+                    <MaterialIcons name="restaurant" size={14} color="#2463eb" />
+                    <Text style={styles.suggestionText}>Log breakfast</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.suggestionBtn} onPress={() => handleSendText('Log lunch')}>
+                    <MaterialIcons name="lunch-dining" size={14} color="#2463eb" />
+                    <Text style={styles.suggestionText}>Log lunch</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.suggestionBtn} onPress={pickMedicalPdf}>
+                    <MaterialIcons name="upload-file" size={14} color="#2463eb" />
+                    <Text style={styles.suggestionText}>Upload report</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         />
 
-        <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.attachBtn} onPress={handleAttach}>
-            <Text style={styles.attachText}>+</Text>
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Log food, symptoms, or ask anything..."
-            placeholderTextColor="#555"
-            onSubmitEditing={handleSendText}
-            returnKeyType="send"
-            multiline
-          />
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendText} disabled={!input.trim()}>
-            <Text style={styles.sendText}>→</Text>
-          </TouchableOpacity>
+        {/* Input Bar */}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.attachBtn} onPress={handleAttach}>
+              <MaterialIcons name="attach-file" size={24} color="#9CA3AF" />
+            </TouchableOpacity>
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Message..."
+                placeholderTextColor="#6B7280"
+                onSubmitEditing={() => handleSendText()}
+                returnKeyType="send"
+              />
+            </View>
+            <TouchableOpacity style={styles.sendBtn} onPress={() => handleSendText()} disabled={!input.trim()}>
+              <MaterialIcons name="send" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -310,28 +347,37 @@ export default function OmniChatScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe:       { flex: 1, backgroundColor: '#0A0A0A' },
-  flex:       { flex: 1 },
-  topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1C1C1E' },
-  backBtn:    { width: 80 },
-  backText:   { color: '#2563EB', fontSize: 15 },
-  title:      { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-  statusPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
-  statusDot:  { width: 7, height: 7, borderRadius: 4, marginRight: 5 },
-  dotLive:    { backgroundColor: '#22C55E' },
-  dotPoll:    { backgroundColor: '#F59E0B' },
-  statusText: { color: '#9CA3AF', fontSize: 11 },
-  chatList:   { paddingHorizontal: 16, paddingVertical: 12 },
-  bubble:     { maxWidth: '82%', borderRadius: 18, padding: 13, marginBottom: 10 },
-  aiBubble:   { backgroundColor: '#1C1C1E', alignSelf: 'flex-start' },
-  userBubble: { backgroundColor: '#2563EB', alignSelf: 'flex-end' },
-  bubbleText: { fontSize: 15, lineHeight: 22 },
-  aiText:     { color: '#E5E7EB' },
-  userText:   { color: '#FFFFFF' },
-  inputRow:   { flexDirection: 'row', alignItems: 'flex-end', padding: 10, borderTopWidth: 1, borderTopColor: '#1C1C1E', backgroundColor: '#0A0A0A' },
-  attachBtn:  { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  attachText: { color: '#9CA3AF', fontSize: 24, lineHeight: 28 },
-  input:      { flex: 1, backgroundColor: '#1C1C1E', color: '#FFFFFF', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 120 },
-  sendBtn:    { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  sendText:   { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: '#0A0A0A' },
+  flex: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A', borderBottomWidth: 1, borderBottomColor: '#1F2937', padding: 16 },
+  headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backBtn: { padding: 4 },
+  headerSubtitle: { color: '#9CA3AF', fontSize: 14, fontWeight: '500' },
+  headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  headerRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  statusDot: { width: 10, height: 10, borderRadius: 5, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, elevation: 4 },
+  dotLive: { backgroundColor: '#22C55E', shadowColor: '#22C55E', shadowOpacity: 0.6 },
+  dotPoll: { backgroundColor: '#F59E0B', shadowColor: '#F59E0B', shadowOpacity: 0.6 },
+  chatList: { padding: 16, paddingBottom: 24, gap: 24 },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 24 },
+  aiAvatar: { backgroundColor: 'rgba(36, 99, 235, 0.1)', borderRadius: 20, padding: 8 },
+  aiMessageContainer: { flex: 1, alignItems: 'flex-start', gap: 4, maxWidth: '80%' },
+  aiMessageSenderText: { color: '#9CA3AF', fontSize: 12, fontWeight: '500', marginLeft: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  aiBubble: { backgroundColor: '#1C1C1E', borderRadius: 16, borderTopLeftRadius: 4, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+  userAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(36, 99, 235, 0.2)', borderWidth: 2, borderColor: 'rgba(36, 99, 235, 0.2)', alignItems: 'center', justifyContent: 'center' },
+  userAvatarText: { color: '#2463eb', fontSize: 16, fontWeight: '700' },
+  userMessageContainer: { flex: 1, alignItems: 'flex-end', gap: 4, maxWidth: '80%' },
+  userMessageSenderText: { color: '#9CA3AF', fontSize: 12, fontWeight: '500', marginRight: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  userBubble: { backgroundColor: '#2463eb', borderRadius: 16, borderTopRightRadius: 4, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#2463eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  bubbleText: { color: '#F1F5F9', fontSize: 15, lineHeight: 22 },
+  processingText: { fontStyle: 'italic', color: '#9CA3AF' },
+  suggestionsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingLeft: 48, marginTop: -12, marginBottom: 16 },
+  suggestionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderColor: '#1F2937', backgroundColor: '#1C1C1E' },
+  suggestionText: { color: '#CBD5E1', fontSize: 14, fontWeight: '500' },
+  inputContainer: { backgroundColor: '#0A0A0A', borderTopWidth: 1, borderTopColor: '#1F2937', padding: 16 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 12, maxWidth: 896, alignSelf: 'center', width: '100%' },
+  attachBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center' },
+  textInputWrapper: { flex: 1 },
+  input: { height: 48, backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 16, color: '#F1F5F9', fontSize: 15 },
+  sendBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#2463eb', alignItems: 'center', justifyContent: 'center', shadowColor: '#2463eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
 });

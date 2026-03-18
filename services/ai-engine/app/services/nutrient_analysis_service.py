@@ -1,4 +1,6 @@
-from app.ai.gemini_client import GeminiClient
+from pydantic import ValidationError
+
+from app.ai.gemini_client import GeminiClient, GeminiError
 from app.schemas.nutrient import (
     FoodAnalysisResponse, NutrientRecommendationResponse,
     IdentifiedFood, VitaminProfile, MineralProfile, NutrientProfile,
@@ -85,7 +87,7 @@ Return JSON in this exact format:
                 total_calories=result.get("total_calories"),
                 confidence_note=result.get("confidence_note")
             )
-        except Exception as e:
+        except (GeminiError, ValidationError) as e:
             # Fallback: return empty profile on failure
             return FoodAnalysisResponse(
                 foods=[IdentifiedFood(name=description or "Unknown food")],
@@ -150,7 +152,7 @@ Return JSON:
                 food_recommendations=[FoodRecommendation(**r) for r in result.get("food_recommendations", [])],
                 supplement_suggestions=[SupplementSuggestion(**s) for s in result.get("supplement_suggestions", [])]
             )
-        except Exception as e:
+        except (GeminiError, ValidationError) as e:
             return NutrientRecommendationResponse(
                 deficiency_insights=[],
                 food_recommendations=[],

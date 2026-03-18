@@ -8,6 +8,9 @@ import com.healthcoach.user.UserService;
 import com.healthcoach.food.dto.FoodLogRequest;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -68,10 +71,18 @@ public class FoodService {
         return saved;
     }
 
-    public List<FoodLog> getByUser(Long userId, LocalDate from, LocalDate to) {
+    public Page<FoodLog> getByUser(Long userId, LocalDate from, LocalDate to, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "date"));
         if (from == null && to == null) {
-            return foodLogRepository.findByUserIdOrderByDateDesc(userId);
+            return foodLogRepository.findByUserId(userId, pageable);
         }
+        LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
+        LocalDate end   = to   != null ? to   : LocalDate.now().plusDays(1);
+        return foodLogRepository.findByUserIdAndDateBetween(userId, start, end, pageable);
+    }
+
+    /** Unbounded list for internal use (HealthSummaryService — already bounded by 90-day date range). */
+    public List<FoodLog> getByUserUnbounded(Long userId, LocalDate from, LocalDate to) {
         LocalDate start = from != null ? from : LocalDate.now().minusDays(89);
         LocalDate end   = to   != null ? to   : LocalDate.now().plusDays(1);
         return foodLogRepository.findByUserIdAndDateBetween(userId, start, end);

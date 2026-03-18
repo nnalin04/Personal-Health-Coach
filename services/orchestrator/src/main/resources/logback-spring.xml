@@ -2,10 +2,11 @@
 <configuration>
 
     <!-- ── Development / test profile: human-readable console output ─────── -->
+    <!-- correlationId shown when set by CorrelationIdFilter; blank otherwise  -->
     <springProfile name="default,test">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+                <pattern>%d{HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
             </encoder>
         </appender>
         <root level="INFO">
@@ -17,10 +18,12 @@
     </springProfile>
 
     <!-- ── Production profile: JSON structured logs ──────────────────────── -->
+    <!-- LogstashEncoder automatically includes all MDC fields (correlationId) -->
     <springProfile name="prod">
         <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <includeCallerData>false</includeCallerData>
+                <includeMdc>true</includeMdc>
                 <fieldNames>
                     <timestamp>time</timestamp>
                     <version>[ignore]</version>
@@ -39,6 +42,7 @@
             </rollingPolicy>
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <includeCallerData>false</includeCallerData>
+                <includeMdc>true</includeMdc>
                 <fieldNames>
                     <timestamp>time</timestamp>
                     <version>[ignore]</version>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Health OS - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2463eb",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#0A0A0A",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0A;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background-color: #141414;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-dark text-slate-100 font-display min-h-screen pb-24">
+<!-- Top Bar -->
+<header class="p-6 flex justify-between items-center">
+<div>
+<h1 class="text-[22px] font-bold text-white leading-tight">Good morning, Nishit</h1>
+<p class="text-[#6B7280] text-sm mt-0.5">Monday, 16 March</p>
+</div>
+<div class="size-11 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 ring-2 ring-background-dark">
+<span class="text-primary font-bold text-sm">NA</span>
+</div>
+</header>
+<!-- Quick Actions -->
+<section class="px-6 mb-8 flex gap-3 overflow-x-auto no-scrollbar">
+<button class="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-white/5 rounded-full text-sm font-medium whitespace-nowrap">
+<span class="material-symbols-outlined text-sm text-primary">add_circle</span>
+            Log meal
+        </button>
+<button class="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-white/5 rounded-full text-sm font-medium whitespace-nowrap">
+<span class="material-symbols-outlined text-sm text-primary">directions_walk</span>
+            Log steps
+        </button>
+<button class="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-white/5 rounded-full text-sm font-medium whitespace-nowrap">
+<span class="material-symbols-outlined text-sm text-primary">upload_file</span>
+            Upload report
+        </button>
+</section>
+<!-- Metric Grid -->
+<main class="px-6 grid grid-cols-2 gap-4">
+<!-- Card 1: Calories -->
+<div class="glass-card p-5 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
+<div class="relative size-24 mb-3">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-[#F59E0B]" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="95.5" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="text-xs font-bold">62%</span>
+</div>
+</div>
+<div class="text-center">
+<p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider mb-1">Calories</p>
+<p class="text-lg font-bold text-white">1,240 kcal</p>
+</div>
+</div>
+<!-- Card 2: Protein -->
+<div class="glass-card p-5 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
+<div class="relative size-24 mb-3">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-[#10B981]" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="108.1" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="text-xs font-bold">57%</span>
+</div>
+</div>
+<div class="text-center">
+<p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider mb-1">Protein</p>
+<p class="text-lg font-bold text-white">68 g</p>
+</div>
+</div>
+<!-- Card 3: Steps -->
+<div class="glass-card p-5 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
+<div class="relative size-24 mb-3">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-[#3B82F6]" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="130.6" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="text-xs font-bold">48%</span>
+</div>
+</div>
+<div class="text-center">
+<p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider mb-1">Steps</p>
+<p class="text-lg font-bold text-white">4,820</p>
+</div>
+</div>
+<!-- Card 4: Weight -->
+<div class="glass-card p-5 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
+<div class="relative size-24 mb-3">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/5" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="4 4" stroke-width="8"></circle>
+<circle class="text-[#A855F7]" cx="48" cy="48" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-[#A855F7]">monitor_weight</span>
+</div>
+</div>
+<div class="text-center">
+<p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider mb-1">Weight</p>
+<p class="text-lg font-bold text-white">72 kg</p>
+</div>
+</div>
+</main>
+<!-- AI Insight -->
+<section class="px-6 mt-6">
+<div class="bg-[#141414] border-l-4 border-primary rounded-r-xl p-5 border-t border-b border-r border-white/5">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-lg">auto_awesome</span>
+<span class="text-[10px] font-bold text-primary uppercase tracking-[0.1em]">AI Insight</span>
+</div>
+<p class="text-sm text-slate-300 leading-relaxed">
+                Your protein intake has been below target for the last 3 days. Consider adding 20g of protein to your lunch to hit your 140g daily goal.
+            </p>
+</div>
+</section>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-6 size-14 rounded-full bg-primary flex items-center justify-center text-white shadow-[0_0_20px_rgba(36,99,235,0.4)] z-50">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<!-- Bottom Nav Bar -->
+<nav class="fixed bottom-0 left-0 right-0 bg-[#0A0A0A]/80 backdrop-blur-xl border-t border-white/5 px-6 pb-6 pt-3 flex justify-between items-center z-40">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">grid_view</span>
+<span class="text-[10px] font-medium">Dashboard</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B7280]" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="text-[10px] font-medium">Health</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B7280]" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="text-[10px] font-medium">Insights</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-[#6B7280]" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</a>
+</nav>
+</body></html>

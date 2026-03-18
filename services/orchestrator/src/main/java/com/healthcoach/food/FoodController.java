@@ -1,11 +1,11 @@
 package com.healthcoach.food;
 
+import com.healthcoach.common.PagedResponse;
 import com.healthcoach.food.dto.FoodLogRequest;
 import com.healthcoach.food.dto.FoodLogResponse;
 import com.healthcoach.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,14 +34,16 @@ public class FoodController {
     }
 
     @GetMapping
-    public List<FoodLogResponse> list(
+    public PagedResponse<FoodLogResponse> list(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "50") int size
     ) {
-        return foodService.getByUser(principal.getId(), from, to)
-                .stream()
-                .map(FoodLogResponse::from)
-                .toList();
+        return PagedResponse.from(
+                foodService.getByUser(principal.getId(), from, to, page, size)
+                           .map(FoodLogResponse::from)
+        );
     }
 }

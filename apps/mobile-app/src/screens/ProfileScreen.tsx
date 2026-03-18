@@ -1,14 +1,4 @@
-/**
- * Profile Screen
- *
- * Accessible via avatar icon in Dashboard top-left.
- * Sections:
- *   1. Personal Info   — name, DOB, gender, weight, height
- *   2. Taste Profile   — region, cuisine style, dietary restrictions, health goal
- *   3. Payment         — plan, billing (placeholder for premium tier)
- *   4. Account         — export data, delete account, logout
- */
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,355 +7,333 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
-  Alert,
-  Switch,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { AppStackParamList } from '../navigation/AppNavigator';
 import { useAuthStore } from '../store/authStore';
 import apiClient from '../services/apiClient';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 type Props = { navigation: StackNavigationProp<AppStackParamList, 'Profile'> };
 
-interface ProfileData {
-  // Personal
-  name:          string;
-  dob:           string;   // YYYY-MM-DD
-  gender:        string;
-  weightKg:      string;
-  heightCm:      string;
-  // Taste Profile
-  region:        string;
-  cuisineStyle:  string;
-  restrictions:  string;
-  healthGoal:    string;
-  // Preferences
-  notifications: boolean;
-}
-
-const INITIAL: ProfileData = {
-  name:          'Your Name',
-  dob:           '',
-  gender:        '',
-  weightKg:      '',
-  heightCm:      '',
-  region:        '',
-  cuisineStyle:  '',
-  restrictions:  'none',
-  healthGoal:    '',
-  notifications: true,
-};
-
-const GENDER_OPTIONS   = ['Male', 'Female', 'Other', 'Prefer not to say'];
-const CUISINE_OPTIONS  = ['Vegetarian', 'Non-vegetarian', 'Vegan', 'Jain', 'Eggetarian'];
-const GOAL_OPTIONS     = ['Lose weight', 'Build muscle', 'Manage diabetes', 'Improve fitness', 'Maintain weight'];
-
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>;
-}
-
-function Field({
-  label, value, onChangeText, placeholder, keyboardType = 'default',
-}: {
-  label: string; value: string; onChangeText: (t: string) => void;
-  placeholder?: string; keyboardType?: 'default' | 'numeric' | 'decimal-pad';
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.fieldInput}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? label}
-        placeholderTextColor="#555"
-        keyboardType={keyboardType}
-        returnKeyType="done"
-      />
-    </View>
-  );
-}
-
-function ChipRow({
-  label, options, selected, onSelect,
-}: {
-  label: string; options: string[]; selected: string; onSelect: (v: string) => void;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-        {options.map((opt) => (
-          <TouchableOpacity
-            key={opt}
-            style={[styles.chip, selected === opt && styles.chipSelected]}
-            onPress={() => onSelect(opt)}
-          >
-            <Text style={[styles.chipText, selected === opt && styles.chipTextSelected]}>{opt}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+interface UserData {
+  name?:            string;
+  email:            string;
+  age?:             number | null;
+  gender?:          string;
+  heightCm?:        number | null;
+  weightKg?:        number | null;
+  activityLevel?:   string;
+  dietaryPreference?: string;
+  medicalConditions?: string[];
+  goal?:            string;
+  region?:          string;
 }
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { user, logout, refreshUser } = useAuthStore();
-  const [profile, setProfile] = useState<ProfileData>(INITIAL);
-  const [saved, setSaved]     = useState(false);
-  const [saving, setSaving]   = useState(false);
+  const { user, token, logout, updateToken, updateUser } = useAuthStore();
+  const [profile, setProfile] = useState<UserData>({ email: user?.email ?? '' });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
 
-  // Load profile from API on mount
   useEffect(() => {
-    (async () => {
+    async function loadProfile() {
       try {
         const res = await apiClient.get('/users/me');
-        const u = res.data;
-        setProfile((prev) => ({
-          ...prev,
-          name:          u.email?.split('@')[0] ?? prev.name,
-          gender:        u.gender        ?? '',
-          weightKg:      '',  // stored in body-metrics, not user entity
-          heightCm:      u.height != null ? String(u.height) : '',
-          region:        u.region        ?? '',
-          cuisineStyle:  u.cuisineStyle  ?? '',
-          restrictions:  u.dietaryRestrictions ?? 'none',
-          healthGoal:    u.goal          ?? '',
-        }));
+        if (res.data) setProfile({ ...res.data, email: res.data.email ?? user?.email ?? '' });
       } catch {
-        // silently degrade
+        // Fallback to minimal info if fetch fails
       } finally {
         setLoading(false);
       }
-    })();
-  }, []);
+    }
+    loadProfile();
+  }, [user]);
 
-  const set = (key: keyof ProfileData) => (val: string | boolean) =>
-    setProfile((p) => ({ ...p, [key]: val }));
+  const handleChange = (field: keyof UserData, value: string) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiClient.put('/users/me', {
-        gender:               profile.gender     || null,
-        height:               profile.heightCm   ? parseFloat(profile.heightCm)  : null,
-        goal:                 profile.healthGoal || null,
-        region:               profile.region     || null,
-        cuisineStyle:         profile.cuisineStyle || null,
-        dietaryRestrictions:  profile.restrictions || null,
-      });
-      await refreshUser();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      Alert.alert('Save failed', 'Could not save your profile. Check your connection.');
+      const payload = {
+        name: profile.name,
+        age: profile.age ? Number(profile.age) : null,
+        gender: profile.gender,
+        heightCm: profile.heightCm ? Number(profile.heightCm) : null,
+        weightKg: profile.weightKg ? Number(profile.weightKg) : null,
+        activityLevel: profile.activityLevel,
+        dietaryPreference: profile.dietaryPreference,
+        medicalConditions: profile.medicalConditions,
+        goal: profile.goal,
+        region: profile.region,
+      };
+
+      const res = await apiClient.put('/users/me', payload);
+      // update local Zustand state so the app knows the new profile
+      const updatedUser = { ...user, ...res.data };
+      updateUser(updatedUser);
+
+      // if JWT token needs refresh (some backends issue new JWT on profile update)
+      if (res.headers['x-new-token']) {
+        updateToken(res.headers['x-new-token']);
+      }
+
+      Alert.alert('Success', 'Profile updated successfully.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update profile.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          // AppNavigator will automatically switch to Auth stack when token clears
-        },
-      },
-    ]);
+    logout();
+    // In a typical React Navigation setup with separate Auth/App stacks based on token presence,
+    // logging out (clearing the token) automatically unmounts the App stack and mounts the Auth stack.
+    // So we don't need to manually navigate to 'Login' here if it's not in the AppStackParamList.
   };
 
-  const handleExport = async () => {
-    try {
-      await apiClient.get('/users/me/export');
-      Alert.alert('Export Data', 'Your data export has been queued. (DPDP Act §17)');
-    } catch {
-      Alert.alert('Export Data', 'Could not process export. Try again later.');
-    }
-  };
+  const initials = profile.email ? profile.email.split('@')[0].slice(0, 2).toUpperCase() : 'NA';
+  const displayName = profile.name || (profile.email ? profile.email.split('@')[0] : 'User');
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Account',
-      'This permanently deletes all your health data and cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiClient.delete('/users/me');
-            } catch { /* ignore */ }
-            await logout();
-          },
-        },
-      ],
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeCentered}>
+        <ActivityIndicator color="#2463eb" />
+      </SafeAreaView>
     );
-  };
-
-  // Initials: prefer display name, fall back to email prefix
-  const displayName = profile.name !== 'Your Name' ? profile.name : (user?.email?.split('@')[0] ?? '');
-  const initials = displayName
-    .split(' ')
-    .map((w) => w[0] ?? '')
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || '?';
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Dashboard</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-          {saving
-            ? <ActivityIndicator size="small" color="#2563EB" />
-            : <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : 'Save'}</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.avatarName}>{displayName || user?.email || 'Your Name'}</Text>
-          <Text style={styles.avatarPlan}>Free Plan</Text>
-        </View>
-
-        {/* ── Personal Info ── */}
-        <SectionTitle title="Personal Info" />
-        <Field label="Full Name"     value={profile.name}     onChangeText={set('name')}     placeholder="e.g. Nishit Srivastava" />
-        <Field label="Date of Birth" value={profile.dob}      onChangeText={set('dob')}      placeholder="YYYY-MM-DD" />
-        <ChipRow label="Gender" options={GENDER_OPTIONS} selected={profile.gender} onSelect={set('gender') as (v: string) => void} />
-        <View style={styles.row}>
-          <View style={styles.halfField}>
-            <Text style={styles.fieldLabel}>Weight (kg)</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={profile.weightKg}
-              onChangeText={set('weightKg')}
-              placeholder="70"
-              placeholderTextColor="#555"
-              keyboardType="decimal-pad"
-            />
-          </View>
-          <View style={[styles.halfField, { marginLeft: 12 }]}>
-            <Text style={styles.fieldLabel}>Height (cm)</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={profile.heightCm}
-              onChangeText={set('heightCm')}
-              placeholder="175"
-              placeholderTextColor="#555"
-              keyboardType="decimal-pad"
-            />
-          </View>
-        </View>
-
-        {/* ── Taste Profile ── */}
-        <SectionTitle title="Food Preferences" />
-        <Field label="Region / State" value={profile.region}      onChangeText={set('region')}      placeholder="e.g. Maharashtra, Punjab" />
-        <ChipRow label="Cuisine Style"      options={CUISINE_OPTIONS} selected={profile.cuisineStyle}  onSelect={set('cuisineStyle') as (v: string) => void} />
-        <Field label="Dietary Restrictions" value={profile.restrictions} onChangeText={set('restrictions')} placeholder="e.g. no onion-garlic, gluten-free, none" />
-        <ChipRow label="Health Goal"        options={GOAL_OPTIONS}    selected={profile.healthGoal}    onSelect={set('healthGoal') as (v: string) => void} />
-
-        {/* ── Notifications ── */}
-        <SectionTitle title="Preferences" />
-        <View style={styles.toggleRow}>
-          <Text style={styles.fieldLabel}>Daily health summary notification</Text>
-          <Switch
-            value={profile.notifications}
-            onValueChange={set('notifications') as (v: boolean) => void}
-            trackColor={{ false: '#333', true: '#2563EB' }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        {/* ── Payment ── */}
-        <SectionTitle title="Plan & Payment" />
-        <View style={styles.planCard}>
-          <View>
-            <Text style={styles.planName}>Free Plan</Text>
-            <Text style={styles.planDesc}>Unlimited food + workout logging, AI macro estimation</Text>
-          </View>
-          <TouchableOpacity style={styles.upgradeBtn} onPress={() => Alert.alert('Coming soon', 'Premium plan with RAG insights and medical report OCR coming in a future release.')}>
-            <Text style={styles.upgradeBtnText}>Upgrade</Text>
+      {/* TopAppBar */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-        <View style={[styles.planCard, { opacity: 0.5 }]}>
-          <View>
-            <Text style={styles.planName}>Premium — ₹299/month</Text>
-            <Text style={styles.planDesc}>+ RAG-powered insights, medical OCR, blood marker tracking</Text>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={handleSave} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color="#2463eb" />
+            ) : (
+              <Text style={styles.saveText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.profileName}>{displayName}</Text>
+              <Text style={styles.profileEmail}>{profile.email}</Text>
+            </View>
+            <TouchableOpacity style={styles.editBtn}>
+              <Text style={styles.editBtnText}>Edit Photo</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Account ── */}
-        <SectionTitle title="Account" />
-        <TouchableOpacity style={styles.accountRow} onPress={handleExport}>
-          <Text style={styles.accountRowText}>📤  Export my data (DPDP Act)</Text>
-          <Text style={styles.accountRowArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.accountRow} onPress={handleLogout}>
-          <Text style={styles.accountRowText}>🔓  Log out</Text>
-          <Text style={styles.accountRowArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.accountRow, styles.dangerRow]} onPress={handleDelete}>
-          <Text style={[styles.accountRowText, styles.dangerText]}>🗑  Delete account & all data</Text>
-          <Text style={styles.accountRowArrow}>›</Text>
-        </TouchableOpacity>
+        {/* Form Sections */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Details</Text>
+          
+          <View style={styles.inputGroup}>
+            <View style={styles.inputIconWrapper}>
+              <MaterialIcons name="person" size={20} color="#9CA3AF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.name || ''}
+                onChangeText={(t) => handleChange('name', t)}
+                placeholder="Not set"
+                placeholderTextColor="#6B7280"
+              />
+            </View>
+          </View>
 
-        <View style={{ height: 40 }} />
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <View style={styles.inputIconWrapper}>
+                <MaterialIcons name="cake" size={20} color="#9CA3AF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Age</Text>
+                <TextInput
+                  style={styles.input}
+                  value={profile.age ? String(profile.age) : ''}
+                  onChangeText={(t) => handleChange('age', t)}
+                  keyboardType="numeric"
+                  placeholder="Not set"
+                  placeholderTextColor="#6B7280"
+                />
+              </View>
+            </View>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <View style={styles.inputIconWrapper}>
+                <MaterialIcons name="wc" size={20} color="#9CA3AF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Gender</Text>
+                <TextInput
+                  style={styles.input}
+                  value={profile.gender || ''}
+                  onChangeText={(t) => handleChange('gender', t)}
+                  placeholder="Not set"
+                  placeholderTextColor="#6B7280"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Body Metrics</Text>
+          
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <View style={styles.inputIconWrapper}>
+                <MaterialIcons name="height" size={20} color="#9CA3AF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Height (cm)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={profile.heightCm ? String(profile.heightCm) : ''}
+                  onChangeText={(t) => handleChange('heightCm', t)}
+                  keyboardType="numeric"
+                  placeholder="Not set"
+                  placeholderTextColor="#6B7280"
+                />
+              </View>
+            </View>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <View style={styles.inputIconWrapper}>
+                <MaterialIcons name="monitor-weight" size={20} color="#9CA3AF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Weight (kg)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={profile.weightKg ? String(profile.weightKg) : ''}
+                  onChangeText={(t) => handleChange('weightKg', t)}
+                  keyboardType="numeric"
+                  placeholder="Not set"
+                  placeholderTextColor="#6B7280"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          
+          <View style={styles.inputGroup}>
+            <View style={styles.inputIconWrapper}>
+              <MaterialIcons name="directions-run" size={20} color="#9CA3AF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Activity Level</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.activityLevel || ''}
+                onChangeText={(t) => handleChange('activityLevel', t)}
+                placeholder="Sedentary, Active..."
+                placeholderTextColor="#6B7280"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.inputIconWrapper}>
+              <MaterialIcons name="restaurant-menu" size={20} color="#9CA3AF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Dietary Preference</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.dietaryPreference || ''}
+                onChangeText={(t) => handleChange('dietaryPreference', t)}
+                placeholder="Vegetarian, Keto..."
+                placeholderTextColor="#6B7280"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.inputIconWrapper}>
+              <MaterialIcons name="flag" size={20} color="#9CA3AF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Region</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.region || ''}
+                onChangeText={(t) => handleChange('region', t)}
+                placeholder="For local food reco..."
+                placeholderTextColor="#6B7280"
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          
+          <TouchableOpacity style={styles.actionRow} onPress={handleLogout}>
+            <View style={styles.actionIconWrapper}>
+              <MaterialIcons name="logout" size={20} color="#EF4444" />
+            </View>
+            <Text style={styles.actionTextLogout}>Log Out</Text>
+            <MaterialIcons name="chevron-right" size={24} color="#374151" />
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe:              { flex: 1, backgroundColor: '#0A0A0A' },
-  topBar:            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1C1C1E' },
-  backBtn:           { width: 100 },
-  backText:          { color: '#2563EB', fontSize: 15 },
-  title:             { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-  saveBtn:           { width: 100, alignItems: 'flex-end' },
-  saveBtnText:       { color: '#2563EB', fontSize: 15, fontWeight: '600' },
-  scroll:            { padding: 20 },
-  avatarSection:     { alignItems: 'center', marginBottom: 32 },
-  avatar:            { width: 80, height: 80, borderRadius: 40, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  avatarText:        { color: '#FFFFFF', fontSize: 28, fontWeight: '700' },
-  avatarName:        { color: '#FFFFFF', fontSize: 20, fontWeight: '600' },
-  avatarPlan:        { color: '#6B7280', fontSize: 13, marginTop: 4 },
-  sectionTitle:      { fontSize: 11, fontWeight: '700', color: '#6B7280', letterSpacing: 1.2, marginBottom: 12, marginTop: 24 },
-  field:             { marginBottom: 16 },
-  fieldLabel:        { fontSize: 13, color: '#9CA3AF', marginBottom: 6 },
-  fieldInput:        { backgroundColor: '#1C1C1E', color: '#FFFFFF', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
-  row:               { flexDirection: 'row', marginBottom: 16 },
-  halfField:         { flex: 1 },
-  chipScroll:        { marginTop: 4 },
-  chip:              { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1C1C1E', marginRight: 8, borderWidth: 1, borderColor: '#333' },
-  chipSelected:      { backgroundColor: '#1D4ED8', borderColor: '#2563EB' },
-  chipText:          { color: '#9CA3AF', fontSize: 13 },
-  chipTextSelected:  { color: '#FFFFFF', fontWeight: '600' },
-  toggleRow:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 16 },
-  planCard:          { backgroundColor: '#1C1C1E', borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  planName:          { color: '#FFFFFF', fontSize: 15, fontWeight: '600', marginBottom: 4 },
-  planDesc:          { color: '#6B7280', fontSize: 12, maxWidth: 220 },
-  upgradeBtn:        { backgroundColor: '#2563EB', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  upgradeBtnText:    { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  accountRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 16, marginBottom: 10 },
-  accountRowText:    { color: '#E5E7EB', fontSize: 15 },
-  accountRowArrow:   { color: '#6B7280', fontSize: 20 },
-  dangerRow:         { backgroundColor: '#1C0A0A' },
-  dangerText:        { color: '#EF4444' },
+  safeCentered: { flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center' },
+  safe: { flex: 1, backgroundColor: '#0A0A0A' },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A', borderBottomWidth: 1, borderBottomColor: '#1F2937', padding: 16 },
+  headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  backBtn: { padding: 4 },
+  headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  headerRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  saveText: { color: '#2463eb', fontSize: 16, fontWeight: '600' },
+  scroll: { padding: 24, paddingBottom: 60, gap: 32 },
+  profileCard: { backgroundColor: '#141414', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(36, 99, 235, 0.2)', borderWidth: 1, borderColor: 'rgba(36, 99, 235, 0.3)', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#2463eb', fontSize: 24, fontWeight: '700' },
+  profileName: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  profileEmail: { color: '#9CA3AF', fontSize: 14 },
+  editBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#1C1C1E', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  editBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '500' },
+  section: { gap: 12 },
+  sectionTitle: { color: '#6B7280', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, marginLeft: 4 },
+  inputGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141414', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 16, paddingVertical: 12, gap: 16 },
+  inputIconWrapper: { width: 32, alignItems: 'center' },
+  inputLabel: { color: '#6B7280', fontSize: 12, fontWeight: '500', marginBottom: 2 },
+  input: { color: '#FFFFFF', fontSize: 15, padding: 0, fontWeight: '500' },
+  actionRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141414', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 16, paddingVertical: 16, gap: 16 },
+  actionIconWrapper: { width: 32, alignItems: 'center' },
+  actionTextLogout: { flex: 1, color: '#EF4444', fontSize: 16, fontWeight: '500' },
 });

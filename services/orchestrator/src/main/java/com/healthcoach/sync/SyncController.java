@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * WatermelonDB Sync Protocol — two-phase pull/push.
@@ -48,11 +49,19 @@ public class SyncController {
             ? LocalDateTime.ofInstant(Instant.ofEpochMilli(lastPulledAt), ZoneOffset.UTC)
             : LocalDateTime.of(2000, 1, 1, 0, 0);
 
+        // Fire all 4 table queries in parallel — each hits its own composite index
+        // (user_id, updated_at) from V7 migration. Total latency = max(4 queries)
+        // instead of sum(4 queries). ~4x improvement on cache-miss sync pulls.
+        CompletableFuture<Map<String, Object>> mealFuture    = CompletableFuture.supplyAsync(() -> buildDelta("food_logs",    userId, since));
+        CompletableFuture<Map<String, Object>> workoutFuture = CompletableFuture.supplyAsync(() -> buildDelta("workout_logs", userId, since));
+        CompletableFuture<Map<String, Object>> metricsFuture = CompletableFuture.supplyAsync(() -> buildDelta("body_metrics", userId, since));
+        CompletableFuture<Map<String, Object>> stepFuture    = CompletableFuture.supplyAsync(() -> buildDelta("step_logs",    userId, since));
+
         Map<String, Object> changes = new LinkedHashMap<>();
-        changes.put("meal_logs",    buildDelta("food_logs",    userId, since));
-        changes.put("workout_logs", buildDelta("workout_logs", userId, since));
-        changes.put("body_metrics", buildDelta("body_metrics", userId, since));
-        changes.put("step_logs",    buildDelta("step_logs",    userId, since));
+        changes.put("meal_logs",    mealFuture.join());
+        changes.put("workout_logs", workoutFuture.join());
+        changes.put("body_metrics", metricsFuture.join());
+        changes.put("step_logs",    stepFuture.join());
 
         return ResponseEntity.ok(Map.of("changes", changes, "timestamp", serverTimestamp));
     }

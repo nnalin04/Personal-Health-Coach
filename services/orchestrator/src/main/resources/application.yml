@@ -28,12 +28,10 @@ spring:
     enabled: true
     baseline-on-migrate: true
   cache:
+    # Per-cache specs managed by CacheConfig bean (CaffeineCacheManager).
+    # refreshAfterWrite prevents cache stampede: stale value returned to concurrent
+    # callers while one thread asynchronously reloads. See CacheConfig.java.
     type: caffeine
-    caffeine:
-      # healthSummary: 5-min TTL, up to 10k users in memory (~10MB)
-      # healthSummaryAi: 30-min TTL for AI insights (expensive Gemini call)
-      spec: maximumSize=10000,expireAfterWrite=300s
-    cache-names: healthSummary,healthSummaryAi
   servlet:
     multipart:
       max-file-size: 10MB
@@ -54,7 +52,8 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:2592000000}  # 30 days default (2592000000 ms)
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}           # access token: 1 hour (3 600 000 ms)
+    refresh-expiration-ms: ${JWT_REFRESH_MS:604800000}    # refresh token: 7 days (604 800 000 ms)
   ai:
     base-url: ${AI_BASE_URL:http://localhost:8000}
   upload-dir: ${UPLOAD_DIR:uploads}

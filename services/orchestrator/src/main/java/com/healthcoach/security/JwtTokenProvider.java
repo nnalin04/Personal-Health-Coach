@@ -13,27 +13,30 @@ import org.springframework.stereotype.Component;
 public class JwtTokenProvider {
 
     private final Key signingKey;
-    private final long jwtExpirationMs;
+    /** Access token TTL — short-lived. Default: 1 hour (3 600 000 ms). */
+    private final long accessExpirationMs;
 
     public JwtTokenProvider(
             @Value("${app.jwt.secret}") String jwtSecret,
-            @Value("${app.jwt.expiration-ms}") long jwtExpirationMs
+            @Value("${app.jwt.expiration-ms:3600000}") long accessExpirationMs
     ) {
         byte[] keyBytes = Decoders.BASE64.decode(padBase64(jwtSecret));
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
-        this.jwtExpirationMs = jwtExpirationMs;
+        this.accessExpirationMs = accessExpirationMs;
     }
 
+    /** Generates a short-lived access token (default 1 hour). */
     public String generateToken(UserPrincipal principal) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
+        Date expiry = new Date(now.getTime() + accessExpirationMs);
 
         return Jwts.builder()
                 .subject(principal.getUsername())
                 .claim("uid", principal.getId())
                 .claim("role", principal.getRole().name())
+                .claim("type", "access")
                 .issuedAt(now)
-                .expiration(expiryDate)
+                .expiration(expiry)
                 .signWith(signingKey)
                 .compact();
     }

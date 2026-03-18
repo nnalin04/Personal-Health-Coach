@@ -1,11 +1,11 @@
 package com.healthcoach.bodymetrics;
 
+import com.healthcoach.common.PagedResponse;
 import com.healthcoach.bodymetrics.dto.BodyMetricsRequest;
 import com.healthcoach.bodymetrics.dto.BodyMetricsResponse;
 import com.healthcoach.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,14 +34,16 @@ public class BodyMetricsController {
     }
 
     @GetMapping
-    public List<BodyMetricsResponse> list(
+    public PagedResponse<BodyMetricsResponse> list(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "50") int size
     ) {
-        return bodyMetricsService.getByUser(principal.getId(), from, to)
-                .stream()
-                .map(BodyMetricsResponse::from)
-                .toList();
+        return PagedResponse.from(
+                bodyMetricsService.getByUser(principal.getId(), from, to, page, size)
+                                  .map(BodyMetricsResponse::from)
+        );
     }
 }

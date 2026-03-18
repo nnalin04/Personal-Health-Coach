@@ -18,13 +18,10 @@ Input can be:
 Output: dict with labValues, summary, recommendations, confidence
 """
 import base64
-import json
 import logging
-import os
-import re
 from typing import Optional
 
-import google.generativeai as genai
+from app.ai.gemini_client import GeminiClient, GeminiError
 
 logger = logging.getLogger(__name__)
 
@@ -57,29 +54,27 @@ status must be one of: LOW, NORMAL, HIGH, CRITICAL
 If a field cannot be determined, use null."""
 
 
-def parse_medical_report(
-    file_data: bytes | None,
-    file_b64: str | None,
-    mime_type: str = "application/pdf",
-    user_context: dict | None = None,
-) -> dict:
-    """
-    Parse a medical report and return structured lab values.
+class MedicalParserService:
+    def __init__(self) -> None:
+        # temperature=0.1 — deterministic extraction for medical data
+        self._client = GeminiClient()
 
-    :param file_data:    Raw bytes of the PDF/image (takes priority over b64)
-    :param file_b64:     Base64-encoded file as fallback
-    :param mime_type:    MIME type of the document
-    :param user_context: User preferences (used for personalised recommendations)
-    :returns:            Structured dict with labValues, summary, recommendations
-    """
-    try:
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-        model = genai.GenerativeModel(
-            os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            system_instruction=_EXTRACTION_SYSTEM,
-        )
+    def parse_report(
+        self,
+        file_data: bytes | None,
+        file_b64: str | None,
+        mime_type: str = "application/pdf",
+        user_context: dict | None = None,
+    ) -> dict:
+        """
+        Parse a medical report and return structured lab values.
 
-        # Resolve bytes
+        :param file_data:    Raw bytes of the PDF/image (takes priority over b64)
+        :param file_b64:     Base64-encoded file as fallback
+        :param mime_type:    MIME type of the document
+        :param user_context: User preferences (used for personalised recommendations)
+        :returns:            Structured dict with labValues, summary, recommendations
+        """
         raw_bytes: Optional[bytes] = None
         if file_data:
             raw_bytes = file_data
@@ -92,44 +87,62 @@ def parse_medical_report(
         if raw_bytes is None:
             return _fallback("No file data received")
 
-        # Build Gemini content parts
-        file_part = {"mime_type": mime_type, "data": raw_bytes}
-        response = model.generate_content([file_part, _EXTRACTION_PROMPT])
-        raw = response.text.strip()
+        try:
+            file_part = {"mime_type": mime_type, "data": raw_bytes}
+            # temperature=0.1 for deterministic medical extraction
+            result = self._client.generate_json(
+                _EXTRACTION_SYSTEM,
+                _EXTRACTION_PROMPT,
+                contents=[file_part],
+                temperature=0.1,
+            )
 
-        # Strip markdown fences if present
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
+            flags = result.get("flags", [])
+            recommendations = _build_recommendations(
+                result.get("lab_values", []), user_context
+            )
+            result["dietary_recommendations"] = recommendations
 
-        result = json.loads(raw)
+            return {
+                "parsed": True,
+                "patientName":            result.get("patient_name"),
+                "reportDate":             result.get("report_date"),
+                "labValues":              result.get("lab_values", []),
+                "summary":                result.get("summary", ""),
+                "flags":                  flags,
+                "dietaryRecommendations": recommendations,
+                "confidence":             result.get("confidence", 0.7),
+            }
 
-        # Add personalised dietary recommendations based on findings
-        flags = result.get("flags", [])
-        recommendations = _build_recommendations(flags, result.get("lab_values", []), user_context)
-        result["dietary_recommendations"] = recommendations
+        except GeminiError as e:
+            logger.error("Medical parser Gemini error: %s", e, exc_info=True)
+            return _fallback(str(e))
+        except Exception as e:
+            logger.error("Medical parser unexpected error: %s", e, exc_info=True)
+            return _fallback(str(e))
 
-        return {
-            "parsed": True,
-            "patientName":           result.get("patient_name"),
-            "reportDate":            result.get("report_date"),
-            "labValues":             result.get("lab_values", []),
-            "summary":               result.get("summary", ""),
-            "flags":                 flags,
-            "dietaryRecommendations": recommendations,
-            "confidence":            result.get("confidence", 0.7),
-        }
 
-    except json.JSONDecodeError as e:
-        logger.warning("Medical parser JSON decode failed: %s", e)
-        return _fallback(f"Could not parse lab report structure: {e}")
-    except Exception as e:
-        logger.error("Medical parser error: %s", e, exc_info=True)
-        return _fallback(str(e))
+# ── module-level convenience wrapper (preserves existing call sites) ──────────
+
+_service: Optional[MedicalParserService] = None
+
+
+def parse_medical_report(
+    file_data: bytes | None,
+    file_b64: str | None,
+    mime_type: str = "application/pdf",
+    user_context: dict | None = None,
+) -> dict:
+    """Module-level wrapper — lazily creates a shared MedicalParserService."""
+    global _service
+    if _service is None:
+        _service = MedicalParserService()
+    return _service.parse_report(file_data, file_b64, mime_type, user_context)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _build_recommendations(flags: list, lab_values: list, user_context: dict | None) -> list[str]:
+def _build_recommendations(lab_values: list, user_context: dict | None) -> list[str]:
     """Generate simple dietary recommendations based on flagged values."""
     recs: list[str] = []
     region = (user_context or {}).get("region", "India")
