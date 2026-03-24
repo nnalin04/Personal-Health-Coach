@@ -12,10 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.Collections;
-import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class WorkoutServiceTest {
@@ -53,42 +55,50 @@ class WorkoutServiceTest {
 
     @Test
     void getByUser_NoDates_ReturnsAllRecordsWithoutDateFilter() {
-        when(workoutLogRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
+        when(workoutLogRepository.findByUserId(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        List<WorkoutLog> result = workoutService.getByUser(1L, null, null);
+        Page<WorkoutLog> result = workoutService.getByUser(1L, null, null, 0, 50);
 
         assertNotNull(result);
-        verify(workoutLogRepository).findByUserIdOrderByDateDesc(1L);
-        verify(workoutLogRepository, never()).findByUserIdAndDateBetween(anyLong(), any(), any());
+        verify(workoutLogRepository).findByUserId(anyLong(), any(Pageable.class));
+        verify(workoutLogRepository, never()).findByUserIdAndDateBetween(anyLong(), any(), any(), any(Pageable.class));
     }
 
     @Test
     void getByUser_WithBothDates_UsesDateBetween() {
         LocalDate from = LocalDate.now().minusDays(7);
         LocalDate to = LocalDate.now();
-        when(workoutLogRepository.findByUserIdAndDateBetween(1L, from, to)).thenReturn(Collections.emptyList());
+        when(workoutLogRepository.findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        workoutService.getByUser(1L, from, to);
+        workoutService.getByUser(1L, from, to, 0, 50);
 
-        verify(workoutLogRepository).findByUserIdAndDateBetween(1L, from, to);
-        verify(workoutLogRepository, never()).findByUserIdOrderByDateDesc(anyLong());
+        verify(workoutLogRepository).findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class));
+        verify(workoutLogRepository, never()).findByUserId(anyLong(), any(Pageable.class));
     }
 
     @Test
     void getByUser_OnlyFromDate_DefaultsEndToFuture() {
         LocalDate from = LocalDate.now().minusDays(7);
+        when(workoutLogRepository.findByUserIdAndDateBetween(anyLong(), eq(from), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        workoutService.getByUser(1L, from, null);
+        workoutService.getByUser(1L, from, null, 0, 50);
 
-        verify(workoutLogRepository).findByUserIdAndDateBetween(eq(1L), eq(from), any(LocalDate.class));
+        verify(workoutLogRepository).findByUserIdAndDateBetween(
+                eq(1L), eq(from), any(LocalDate.class), any(Pageable.class));
     }
 
     @Test
     void getByUser_OnlyToDate_DefaultsStartToPast() {
         LocalDate to = LocalDate.now();
+        when(workoutLogRepository.findByUserIdAndDateBetween(anyLong(), any(LocalDate.class), eq(to), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        workoutService.getByUser(1L, null, to);
+        workoutService.getByUser(1L, null, to, 0, 50);
 
-        verify(workoutLogRepository).findByUserIdAndDateBetween(eq(1L), any(LocalDate.class), eq(to));
+        verify(workoutLogRepository).findByUserIdAndDateBetween(
+                eq(1L), any(LocalDate.class), eq(to), any(Pageable.class));
     }
 }

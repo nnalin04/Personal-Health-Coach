@@ -22,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -105,10 +107,10 @@ class UserServiceTest {
         user.setId(1L);
         user.setEmail("export@example.com");
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(workoutLogRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
-        when(foodLogRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
-        when(bodyMetricsRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
-        when(stepsLogRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
+        when(workoutLogRepository.findByUserId(anyLong(), any(Pageable.class))).thenReturn(Page.empty());
+        when(foodLogRepository.findByUserId(anyLong(), any(Pageable.class))).thenReturn(Page.empty());
+        when(bodyMetricsRepository.findByUserId(anyLong(), any(Pageable.class))).thenReturn(Page.empty());
+        when(stepsLogRepository.findByUserId(anyLong(), any(Pageable.class))).thenReturn(Page.empty());
         when(medicalReportRepository.findByUserIdOrderByReportDateDesc(1L)).thenReturn(Collections.emptyList());
         when(healthGoalRepository.findByUserId(1L)).thenReturn(Collections.emptyList());
         when(nutrientLogRepository.findByUserIdAndLogDateBetween(eq(1L), any(), any())).thenReturn(Collections.emptyList());

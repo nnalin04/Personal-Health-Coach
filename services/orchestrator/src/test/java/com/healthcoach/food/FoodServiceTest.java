@@ -15,10 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.Collections;
-import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class FoodServiceTest {
@@ -84,33 +86,37 @@ class FoodServiceTest {
 
     @Test
     void getByUser_NoDates_ReturnsAllRecordsWithoutDateFilter() {
-        when(foodLogRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
+        when(foodLogRepository.findByUserId(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        List<FoodLog> result = foodService.getByUser(1L, null, null);
+        Page<FoodLog> result = foodService.getByUser(1L, null, null, 0, 50);
 
         assertNotNull(result);
-        verify(foodLogRepository).findByUserIdOrderByDateDesc(1L);
-        verify(foodLogRepository, never()).findByUserIdAndDateBetween(anyLong(), any(), any());
+        verify(foodLogRepository).findByUserId(anyLong(), any(Pageable.class));
+        verify(foodLogRepository, never()).findByUserIdAndDateBetween(anyLong(), any(), any(), any(Pageable.class));
     }
 
     @Test
     void getByUser_WithBothDates_UsesDateBetween() {
         LocalDate from = LocalDate.now().minusDays(7);
         LocalDate to = LocalDate.now();
-        when(foodLogRepository.findByUserIdAndDateBetween(1L, from, to)).thenReturn(Collections.emptyList());
+        when(foodLogRepository.findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        foodService.getByUser(1L, from, to);
+        foodService.getByUser(1L, from, to, 0, 50);
 
-        verify(foodLogRepository).findByUserIdAndDateBetween(1L, from, to);
-        verify(foodLogRepository, never()).findByUserIdOrderByDateDesc(anyLong());
+        verify(foodLogRepository).findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class));
+        verify(foodLogRepository, never()).findByUserId(anyLong(), any(Pageable.class));
     }
 
     @Test
     void getByUser_OnlyFromDate_DefaultsEndToFuture() {
         LocalDate from = LocalDate.now().minusDays(7);
+        when(foodLogRepository.findByUserIdAndDateBetween(anyLong(), eq(from), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        foodService.getByUser(1L, from, null);
+        foodService.getByUser(1L, from, null, 0, 50);
 
-        verify(foodLogRepository).findByUserIdAndDateBetween(eq(1L), eq(from), any(LocalDate.class));
+        verify(foodLogRepository).findByUserIdAndDateBetween(eq(1L), eq(from), any(LocalDate.class), any(Pageable.class));
     }
 }

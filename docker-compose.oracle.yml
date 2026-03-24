@@ -1,0 +1,142 @@
+# Oracle Cloud ARM deployment (VM.Standard.A1.Flex — 4 OCPUs, 24 GB RAM)
+# Builds images directly on the VM — no GCR needed.
+#
+# Usage (on Oracle VM):
+#   docker compose -f docker-compose.oracle.yml --env-file .env.oracle up -d --build
+#
+# First-time TLS setup:
+#   bash infra/scripts/deploy-oracle.sh
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: health-coach-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - health-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    container_name: health-coach-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - health-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: health-coach-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - health-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fastapi-ai:
+    build:
+      context: ./services/ai-engine
+      dockerfile: Dockerfile
+    image: health-coach-ai:oracle
+    container_name: health-coach-ai
+    restart: unless-stopped
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    networks:
+      - health-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  springboot-app:
+    build:
+      context: ./services/orchestrator
+      dockerfile: Dockerfile
+    image: health-coach-backend:oracle
+    container_name: health-coach-backend
+    restart: unless-stopped
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS:-3600000}
+      - JWT_REFRESH_MS=${JWT_REFRESH_MS:-604800000}
+      - AI_BASE_URL=http://fastapi-ai:8000
+      - UPLOAD_DIR=/app/uploads
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+    volumes:
+      - app_uploads:/app/uploads
+    networks:
+      - health-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fastapi-ai:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: health-coach-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    networks:
+      - health-network
+    depends_on:
+      - springboot-app
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  app_uploads:
+  letsencrypt:
+  certbot_www:
+
+networks:
+  health-network:
+    driver: bridge

@@ -71,3 +71,6 @@ worker-node-setup.md
 cost_and_pricing_analysis.md
 scaling_to_one_million.md
 test-reports/
+
+# Oracle deployment secrets
+.env.oracle

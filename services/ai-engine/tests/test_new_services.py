@@ -63,14 +63,6 @@ def test_resolve_payload_gcs_calls_download():
 import app.services.medical_parser_service as med_mod
 
 
-def _mock_gemini_medical(response_json: dict):
-    mock_response = MagicMock()
-    mock_response.text = json.dumps(response_json)
-    mock_model = MagicMock()
-    mock_model.generate_content.return_value = mock_response
-    return mock_model
-
-
 def test_medical_parser_returns_fallback_when_no_data():
     result = med_mod.parse_medical_report(file_data=None, file_b64=None)
     assert result["parsed"] is False
@@ -79,7 +71,7 @@ def test_medical_parser_returns_fallback_when_no_data():
 
 
 def test_medical_parser_success_with_bytes():
-    mock_model = _mock_gemini_medical({
+    payload = {
         "patient_name": "Test User",
         "report_date": "2026-03-14",
         "lab_values": [
@@ -89,9 +81,10 @@ def test_medical_parser_success_with_bytes():
         "summary": "Haemoglobin is below normal range.",
         "flags": ["Haemoglobin LOW"],
         "confidence": 0.9,
-    })
-    with patch("app.services.medical_parser_service.genai") as mock_genai:
-        mock_genai.GenerativeModel.return_value = mock_model
+    }
+    med_mod._service = None  # reset singleton so GeminiClient mock takes effect
+    with patch("app.services.medical_parser_service.GeminiClient") as MockClient:
+        MockClient.return_value.generate_json.return_value = payload
         result = med_mod.parse_medical_report(
             file_data=b"fake-pdf-bytes",
             file_b64=None,
@@ -105,32 +98,32 @@ def test_medical_parser_success_with_bytes():
 
 
 def test_medical_parser_success_with_b64():
-    mock_model = _mock_gemini_medical({
+    payload = {
         "lab_values": [],
         "summary": "Normal report.",
         "flags": [],
         "confidence": 0.8,
-    })
+    }
     pdf_b64 = base64.b64encode(b"fake-pdf").decode()
-    with patch("app.services.medical_parser_service.genai") as mock_genai:
-        mock_genai.GenerativeModel.return_value = mock_model
+    med_mod._service = None
+    with patch("app.services.medical_parser_service.GeminiClient") as MockClient:
+        MockClient.return_value.generate_json.return_value = payload
         result = med_mod.parse_medical_report(file_data=None, file_b64=pdf_b64)
     assert result["parsed"] is True
     assert result["summary"] == "Normal report."
 
 
 def test_medical_parser_json_error_returns_fallback():
-    mock_model = MagicMock()
-    mock_model.generate_content.return_value = MagicMock(text="not valid json {{{")
-    with patch("app.services.medical_parser_service.genai") as mock_genai:
-        mock_genai.GenerativeModel.return_value = mock_model
+    from app.ai.gemini_client import GeminiError
+    med_mod._service = None
+    with patch("app.services.medical_parser_service.GeminiClient") as MockClient:
+        MockClient.return_value.generate_json.side_effect = GeminiError("bad json")
         result = med_mod.parse_medical_report(file_data=b"bytes", file_b64=None)
     assert result["parsed"] is False
 
 
 def test_medical_recommendations_iron_deficiency():
     recs = med_mod._build_recommendations(
-        flags=["Haemoglobin LOW"],
         lab_values=[{"test_name": "Haemoglobin", "value": 10, "unit": "g/dL", "status": "LOW"}],
         user_context={"region": "India"},
     )
@@ -139,7 +132,6 @@ def test_medical_recommendations_iron_deficiency():
 
 def test_medical_recommendations_high_glucose():
     recs = med_mod._build_recommendations(
-        flags=["Glucose HIGH"],
         lab_values=[{"test_name": "Glucose", "value": 200, "unit": "mg/dL", "status": "HIGH"}],
         user_context={},
     )

@@ -12,10 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.Collections;
-import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class BodyMetricsServiceTest {
@@ -52,35 +54,38 @@ class BodyMetricsServiceTest {
 
     @Test
     void getByUser_NoDates_ReturnsAllRecordsWithoutDateFilter() {
-        when(bodyMetricsRepository.findByUserIdOrderByDateDesc(1L)).thenReturn(Collections.emptyList());
+        when(bodyMetricsRepository.findByUserId(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        List<BodyMetrics> result = bodyMetricsService.getByUser(1L, null, null);
+        Page<BodyMetrics> result = bodyMetricsService.getByUser(1L, null, null, 0, 50);
 
         assertNotNull(result);
-        verify(bodyMetricsRepository).findByUserIdOrderByDateDesc(1L);
-        verify(bodyMetricsRepository, never()).findByUserIdAndDateBetweenOrderByDateAsc(anyLong(), any(), any());
+        verify(bodyMetricsRepository).findByUserId(anyLong(), any(Pageable.class));
+        verify(bodyMetricsRepository, never()).findByUserIdAndDateBetween(anyLong(), any(), any(), any(Pageable.class));
     }
 
     @Test
     void getByUser_WithBothDates_UsesDateBetween() {
         LocalDate from = LocalDate.now().minusDays(30);
         LocalDate to = LocalDate.now();
-        when(bodyMetricsRepository.findByUserIdAndDateBetweenOrderByDateAsc(1L, from, to))
-                .thenReturn(Collections.emptyList());
+        when(bodyMetricsRepository.findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        bodyMetricsService.getByUser(1L, from, to);
+        bodyMetricsService.getByUser(1L, from, to, 0, 50);
 
-        verify(bodyMetricsRepository).findByUserIdAndDateBetweenOrderByDateAsc(1L, from, to);
-        verify(bodyMetricsRepository, never()).findByUserIdOrderByDateDesc(anyLong());
+        verify(bodyMetricsRepository).findByUserIdAndDateBetween(anyLong(), eq(from), eq(to), any(Pageable.class));
+        verify(bodyMetricsRepository, never()).findByUserId(anyLong(), any(Pageable.class));
     }
 
     @Test
     void getByUser_OnlyFromDate_DefaultsEndToFuture() {
         LocalDate from = LocalDate.now().minusDays(7);
+        when(bodyMetricsRepository.findByUserIdAndDateBetween(anyLong(), eq(from), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
 
-        bodyMetricsService.getByUser(1L, from, null);
+        bodyMetricsService.getByUser(1L, from, null, 0, 50);
 
-        verify(bodyMetricsRepository).findByUserIdAndDateBetweenOrderByDateAsc(
-                eq(1L), eq(from), any(LocalDate.class));
+        verify(bodyMetricsRepository).findByUserIdAndDateBetween(
+                eq(1L), eq(from), any(LocalDate.class), any(Pageable.class));
     }
 }

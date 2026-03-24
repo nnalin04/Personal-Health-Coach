@@ -55,7 +55,7 @@ class AuthControllerTest {
     @Test
     void register_ValidPayload_Returns200WithToken() throws Exception {
         UserProfileResponse profile = new UserProfileResponse(1L, "test@example.com", 25, "Male", 175.0, "Build Muscle", "Omnivore", "", null, null, null, null, null);
-        AuthResponse response = new AuthResponse("jwt-token-here", "Bearer", profile);
+        AuthResponse response = new AuthResponse("jwt-token-here", "dummy-refresh-token", "Bearer", 3600L, profile);
         when(authService.register(any())).thenReturn(response);
 
         RegisterRequest request = new RegisterRequest(
@@ -109,7 +109,7 @@ class AuthControllerTest {
     @Test
     void login_ValidCredentials_Returns200WithToken() throws Exception {
         UserProfileResponse profile = new UserProfileResponse(1L, "test@example.com", 25, "Male", 175.0, "Build Muscle", "Omnivore", "", null, null, null, null, null);
-        AuthResponse response = new AuthResponse("login-token", "Bearer", profile);
+        AuthResponse response = new AuthResponse("login-token", "dummy-refresh-token", "Bearer", 3600L, profile);
         when(authService.login(any())).thenReturn(response);
 
         LoginRequest request = new LoginRequest("test@example.com", "ValidPass123!");

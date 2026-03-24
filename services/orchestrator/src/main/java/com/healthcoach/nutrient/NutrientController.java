@@ -7,6 +7,8 @@ import com.healthcoach.nutrient.dto.*;
 import com.healthcoach.security.UserPrincipal;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -71,7 +73,9 @@ public class NutrientController {
         }).collect(java.util.stream.Collectors.toList());
 
         // Build food history summary from recent food logs
-        List<com.healthcoach.food.FoodLog> recentFood = foodLogRepo.findByUserIdOrderByDateDesc(user.getId());
+        List<com.healthcoach.food.FoodLog> recentFood = foodLogRepo
+                .findByUserId(user.getId(), PageRequest.of(0, 14, Sort.by(Sort.Direction.DESC, "date")))
+                .getContent();
         String foodSummary = recentFood.stream()
             .limit(14)
             .map(f -> f.getFoodName() + " (" + f.getMealType() + ")")

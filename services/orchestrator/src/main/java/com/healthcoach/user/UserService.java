@@ -19,6 +19,8 @@ import com.healthcoach.user.dto.UserDataExportDto.NutrientLogExport;
 import com.healthcoach.user.dto.UserProfileResponse;
 import com.healthcoach.workout.WorkoutLogRepository;
 import com.healthcoach.workout.dto.WorkoutLogResponse;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,20 +93,22 @@ public class UserService {
     public UserDataExportDto exportData(Long userId) {
         User user = getById(userId);
 
+        Pageable allByDateDesc = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "date"));
+
         List<WorkoutLogResponse> workouts = workoutLogRepository
-                .findByUserIdOrderByDateDesc(userId).stream()
+                .findByUserId(userId, allByDateDesc).stream()
                 .map(WorkoutLogResponse::from).toList();
 
         List<FoodLogResponse> food = foodLogRepository
-                .findByUserIdOrderByDateDesc(userId).stream()
+                .findByUserId(userId, allByDateDesc).stream()
                 .map(FoodLogResponse::from).toList();
 
         List<BodyMetricsResponse> metrics = bodyMetricsRepository
-                .findByUserIdOrderByDateDesc(userId).stream()
+                .findByUserId(userId, allByDateDesc).stream()
                 .map(BodyMetricsResponse::from).toList();
 
         List<StepsLogResponse> steps = stepsLogRepository
-                .findByUserIdOrderByDateDesc(userId).stream()
+                .findByUserId(userId, allByDateDesc).stream()
                 .map(StepsLogResponse::from).toList();
 
         List<MedicalReportExport> reports = medicalReportRepository

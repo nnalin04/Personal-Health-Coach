@@ -11,6 +11,7 @@ import com.healthcoach.security.JwtTokenProvider;
 import com.healthcoach.user.User;
 import com.healthcoach.user.UserRepository;
 import com.healthcoach.user.UserRole;
+import com.healthcoach.auth.RefreshTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,12 +33,14 @@ class AuthServiceTest {
     private AuthenticationManager authenticationManager;
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, authenticationManager, jwtTokenProvider);
+        authService = new AuthService(userRepository, passwordEncoder, authenticationManager, jwtTokenProvider, refreshTokenService);
     }
 
     @Test
