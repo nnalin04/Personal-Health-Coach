@@ -22,6 +22,8 @@ import logging
 from typing import Optional
 
 from app.ai.gemini_client import GeminiClient, GeminiError
+from app.ai.base_client import BaseAIClient
+from app.ai.paddleocr_client import PaddleOCRClient
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class MedicalParserService:
     def __init__(self) -> None:
         # temperature=0.1 — deterministic extraction for medical data
         self._client = GeminiClient()
+        self._ocr = PaddleOCRClient()
 
     def parse_report(
         self,
@@ -65,6 +68,7 @@ class MedicalParserService:
         file_b64: str | None,
         mime_type: str = "application/pdf",
         user_context: dict | None = None,
+        client: BaseAIClient | None = None,
     ) -> dict:
         """
         Parse a medical report and return structured lab values.
@@ -87,15 +91,34 @@ class MedicalParserService:
         if raw_bytes is None:
             return _fallback("No file data received")
 
+        active_client = client or self._client
+
         try:
-            file_part = {"mime_type": mime_type, "data": raw_bytes}
-            # temperature=0.1 for deterministic medical extraction
-            result = self._client.generate_json(
-                _EXTRACTION_SYSTEM,
-                _EXTRACTION_PROMPT,
-                contents=[file_part],
-                temperature=0.1,
-            )
+            # OCR pre-pass: extract text locally to cut LLM token cost ~80%
+            extracted_text = self._ocr.extract_text(raw_bytes, mime_type)
+
+            if extracted_text is not None:
+                # Text-only call — much cheaper than vision inference
+                logger.info(
+                    "OCR pre-pass succeeded (%d chars) — using text-only LLM call",
+                    len(extracted_text),
+                )
+                result = active_client.generate_json(
+                    _EXTRACTION_SYSTEM,
+                    f"{_EXTRACTION_PROMPT}\n\nExtracted report text:\n{extracted_text}",
+                    contents=None,
+                    temperature=0.1,
+                )
+            else:
+                # OCR unavailable or failed — fall through to vision path
+                logger.info("OCR pre-pass returned None — using vision LLM call")
+                file_part = {"mime_type": mime_type, "data": raw_bytes}
+                result = active_client.generate_json(
+                    _EXTRACTION_SYSTEM,
+                    _EXTRACTION_PROMPT,
+                    contents=[file_part],
+                    temperature=0.1,
+                )
 
             flags = result.get("flags", [])
             recommendations = _build_recommendations(
@@ -114,11 +137,8 @@ class MedicalParserService:
                 "confidence":             result.get("confidence", 0.7),
             }
 
-        except GeminiError as e:
-            logger.error("Medical parser Gemini error: %s", e, exc_info=True)
-            return _fallback(str(e))
         except Exception as e:
-            logger.error("Medical parser unexpected error: %s", e, exc_info=True)
+            logger.error("Medical parser error: %s", e, exc_info=True)
             return _fallback(str(e))
 
 
@@ -132,12 +152,13 @@ def parse_medical_report(
     file_b64: str | None,
     mime_type: str = "application/pdf",
     user_context: dict | None = None,
+    client: "BaseAIClient | None" = None,
 ) -> dict:
     """Module-level wrapper — lazily creates a shared MedicalParserService."""
     global _service
     if _service is None:
         _service = MedicalParserService()
-    return _service.parse_report(file_data, file_b64, mime_type, user_context)
+    return _service.parse_report(file_data, file_b64, mime_type, user_context, client)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

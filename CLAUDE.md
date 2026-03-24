@@ -205,6 +205,25 @@ All skills are in `.claude/skills/`. Invoke with `/skill-name [optional args]`.
 - `/retrospective` — Process accumulated learnings, update agent/skill files system-wide
 - `/improve [name]` — Targeted improvement of one agent or skill using its learnings
 - `/split-skill [name]` — Split an oversized skill into router + focused sub-skills
+- `/skill-builder [name]` — Build or audit a skill following Claude Code best practices (guided discovery interview)
+- `/skill-stocktake` — Periodic audit of all skills: Keep / Improve / Update / Retire / Merge verdicts
+
+### Session Management
+- `/save-session` — Save current session state to `~/.claude/sessions/` (context, decisions, next steps)
+- `/resume-session [date|path]` — Load the most recent saved session and resume where you left off
+- `/checkpoint [create|verify|list] [name]` — Git-integrated workflow checkpoints for safe incremental work
+
+### Continuous Learning
+- `/learn` — Extract reusable patterns from the current session and save as skills
+- `/learn-eval` — Extract pattern + quality gate + holistic verdict before saving (stricter than `/learn`)
+
+### Tooling & Cost
+- `/model-route [task] [--budget low|med|high]` — Recommend the right model tier (Haiku/Sonnet/Opus) for a task
+- `/harness-audit [scope]` — Score the Claude Code setup across 7 categories (tool coverage, hooks, memory, etc.)
+
+### Autonomous Loops
+- Use `autonomous-loops` skill patterns for sequential pipelines, PR loops, and infinite agentic workflows
+- Use `loop-operator` agent to monitor and intervene in long-running loops
 
 ## Hooks (`.claude/hooks/`)
 Hooks run automatically before/after tool calls — no configuration needed beyond `settings.json`.
@@ -229,7 +248,7 @@ Reviewed `github.com/ruvnet/ruflo`. Extracted all useful concepts natively. **MC
 | Swarm agent coordination | Claude Code's native `Agent` tool | Already built-in (92% architectural match) |
 
 ## Agents (`.claude/agents/`)
-Only 4 agents exist — each represents a genuine task conflict, not just domain expertise.
+Agents exist ONLY when there is a genuine task conflict, not just domain expertise.
 
 | Agent | Conflict | When to use |
 |-------|----------|-------------|
@@ -237,3 +256,11 @@ Only 4 agents exist — each represents a genuine task conflict, not just domain
 | `qa-tester` | Developer vs Tester — can't objectively test what you just built | E2E testing, integration verification, GO/NO-GO verdicts |
 | `security-engineer` | Developer vs Attacker — optimistic builder vs adversarial auditor | Security audits, OWASP checks, vulnerability scanning |
 | `devops-engineer` | Implementation vs Operations — fast development vs cautious infra changes | GCP, Docker, deployment, incident response, env validation |
+| `database-reviewer` | Optimistic developer vs DB specialist — PostgreSQL query/schema/RLS/indexing | SQL queries, migrations, schema design, performance tuning |
+| `loop-operator` | Developer vs Autonomous loop monitor — safe stop conditions and recovery | Long-running agentic loops, PR automation, infinite task queues |
+| `architect` | Implementation vs Architecture — big-picture system design | New services, major refactors, architectural decisions |
+| `planner` | Execution vs Planning — complex multi-step task decomposition | Feature planning, implementation strategy, risk assessment |
+| `build-error-resolver` | Build failures vs working code — focused minimal fixes | TypeScript/build errors, type mismatches, compilation failures |
+| `doc-updater` | Code changes vs docs — keep docs in sync | After major changes, updating README/CODEMAPS/guides |
+| `refactor-cleaner` | Feature code vs dead code — removing unused/duplicate code | After refactors, knip/depcheck analysis, cleanup passes |
+| `tdd-guide` | Tests-after vs tests-first — enforce TDD methodology | New features, bug fixes, 80%+ coverage enforcement |

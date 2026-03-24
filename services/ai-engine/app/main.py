@@ -27,12 +27,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Health OS AI Engine", version="2.0.0", lifespan=lifespan)
 
-# Simple in-memory rate limiter: 10 Gemini requests per minute per caller IP.
-# Disabled when GEMINI_API_KEY is absent (test / offline mode).
-_RATE_LIMIT = 10
+# Simple in-memory rate limiter: 15 requests per minute per caller IP.
+# Disabled when no AI API key is present (test / offline mode).
+# Per-provider tracking (Groq: 100/min, Gemini: 12/min, Claude: 5/min) is a
+# future enhancement — for now a shared conservative limit protects Gemini free tier.
+_RATE_LIMIT = 15
 _WINDOW_SECONDS = 60
 _request_log: dict[str, list[float]] = defaultdict(list)
-_rate_limiting_enabled = bool(os.getenv("GEMINI_API_KEY", "").strip())
+_rate_limiting_enabled = any(
+    os.getenv(k, "").strip()
+    for k in ("GEMINI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY")
+)
 
 
 @app.middleware("http")

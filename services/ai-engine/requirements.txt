@@ -13,3 +13,11 @@ langchain==0.3.7
 langchain-google-genai==2.0.5
 pgvector==0.3.5
 psycopg2-binary==2.9.10
+# ── Multi-provider AI clients ──────────────────────────────────────────────────
+groq>=0.11.0
+anthropic>=0.40.0
+# ── PaddleOCR (local OCR pre-pass for medical reports, cuts LLM token cost ~80%) ─
+# ARM64 guard: PaddleOCR has Linux arm64 wheels (Oracle VM) but not macOS arm64.
+# The ImportError is handled gracefully in paddleocr_client.py — service runs fine without it.
+paddlepaddle==2.6.2; sys_platform != "darwin" and platform_machine != "arm64"
+paddleocr>=2.9.1; sys_platform != "darwin" and platform_machine != "arm64"

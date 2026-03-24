@@ -146,7 +146,8 @@ Instructions:
         return "I'm having trouble generating a response right now. Please try again."
 
 
-def answer_query(query: str, user_context: dict, category: Optional[str] = None) -> dict:
+def answer_query(query: str, user_context: dict, category: Optional[str] = None,
+                 client=None) -> dict:
     """
     Full RAG pipeline: embed → retrieve → synthesise.
 

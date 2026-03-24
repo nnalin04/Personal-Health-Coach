@@ -19,6 +19,7 @@ import enum
 import logging
 
 from app.ai.gemini_client import GeminiClient
+from app.ai.model_router import get_client, get_vision_client
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,12 @@ def route_task(
         file_bytes, source = resolve_payload(raw_url)
         image_b64 = None if source == "gcs" else raw_url
 
+        try:
+            client = get_vision_client("FOOD")
+        except Exception as exc:
+            logger.warning("model_router.get_vision_client FOOD failed (%s) — using default", exc)
+            client = None
+
         description = payload.get("description") or payload.get("chatId", "")
         result = service.analyze_food(
             image_base64=image_b64,
@@ -126,6 +133,7 @@ def route_task(
             description=description,
             image_mime_type=payload.get("mime_type", "image/jpeg"),
             user_context=user_context,
+            client=client,
         )
 
         confidences = [f.confidence for f in (result.foods or []) if f.confidence is not None]
@@ -170,11 +178,18 @@ def route_task(
         file_bytes, source = resolve_payload(raw_url)
         file_b64   = None if source == "gcs" else raw_url
 
+        try:
+            client = get_client("REPORT")
+        except Exception as exc:
+            logger.warning("model_router.get_client REPORT failed (%s) — using default", exc)
+            client = None
+
         parsed = parse_medical_report(
             file_data=file_bytes,
             file_b64=file_b64,
             mime_type=mime_type,
             user_context=user_context,
+            client=client,
         )
 
         status = "COMPLETED" if parsed.get("parsed") else "PARTIAL"
@@ -193,6 +208,12 @@ def route_task(
         file_bytes, source = resolve_payload(raw_url)
         file_b64   = None if source == "gcs" else raw_url
         description = payload.get("message") or payload.get("description", "")
+
+        try:
+            client = get_vision_client("RECEIPT")
+        except Exception as exc:
+            logger.warning("model_router.get_vision_client RECEIPT failed (%s) — using default", exc)
+            client = None
 
         parsed = parse_receipt(
             file_data=file_bytes,
@@ -221,7 +242,13 @@ def route_task(
             "message": "Please send a health question and I'll do my best to help!",
         }
 
-    rag_result = answer_query(query=query, user_context=user_context)
+    try:
+        text_client = get_client("TEXT")
+    except Exception as exc:
+        logger.warning("model_router.get_client TEXT failed (%s) — using default", exc)
+        text_client = None
+
+    rag_result = answer_query(query=query, user_context=user_context, client=text_client)
     return {
         "type":       "TEXT",
         "taskId":     task_id,

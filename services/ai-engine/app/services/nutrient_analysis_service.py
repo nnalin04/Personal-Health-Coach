@@ -1,6 +1,9 @@
+import base64
+
 from pydantic import ValidationError
 
 from app.ai.gemini_client import GeminiClient, GeminiError
+from app.ai.base_client import BaseAIClient
 from app.schemas.nutrient import (
     FoodAnalysisResponse, NutrientRecommendationResponse,
     IdentifiedFood, VitaminProfile, MineralProfile, NutrientProfile,
@@ -27,7 +30,8 @@ class NutrientAnalysisService:
 
     def analyze_food(self, image_base64: str | None, description: str | None,
                      image_mime_type: str, user_context: dict,
-                     image_bytes: bytes | None = None) -> FoodAnalysisResponse:
+                     image_bytes: bytes | None = None,
+                     client: BaseAIClient | None = None) -> FoodAnalysisResponse:
         region = user_context.get("region", "India")
         cuisine = user_context.get("cuisine_style", "mixed")
         restrictions = user_context.get("dietary_restrictions", "none")
@@ -60,18 +64,32 @@ Return JSON in this exact format:
   "confidence_note": "brief note about analysis confidence"
 }}"""
 
+        from app.ai.groq_client import GroqClient
+        active_client = client or self.client
+
         try:
             if image_bytes:
                 # GCS path: raw bytes from cloud storage
-                image_part = {"mime_type": image_mime_type, "data": image_bytes}
-                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
+                if isinstance(active_client, GroqClient):
+                    result = active_client.generate_vision_json(
+                        FOOD_ANALYSIS_SYSTEM, user_prompt, image_bytes, image_mime_type
+                    )
+                else:
+                    image_part = {"mime_type": image_mime_type, "data": image_bytes}
+                    result = active_client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
             elif image_base64:
                 # Local-dev path: base64-encoded bytes
-                image_part = {"mime_type": image_mime_type, "data": image_base64}
-                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
+                if isinstance(active_client, GroqClient):
+                    img_data = base64.b64decode(image_base64)
+                    result = active_client.generate_vision_json(
+                        FOOD_ANALYSIS_SYSTEM, user_prompt, img_data, image_mime_type
+                    )
+                else:
+                    image_part = {"mime_type": image_mime_type, "data": image_base64}
+                    result = active_client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt, [image_part])
             else:
                 # Text-only call (description only, no image)
-                result = self.client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt)
+                result = active_client.generate_json(FOOD_ANALYSIS_SYSTEM, user_prompt)
 
             foods = [IdentifiedFood(**f) for f in result.get("foods", [])]
             raw_n = result.get("nutrients", {})
@@ -96,7 +114,8 @@ Return JSON in this exact format:
             )
 
     def get_recommendations(self, deficiency_profile: list, food_history_summary: str | None,
-                            user_context: dict) -> NutrientRecommendationResponse:
+                            user_context: dict,
+                            client: BaseAIClient | None = None) -> NutrientRecommendationResponse:
         region = user_context.get("region", "India")
         cuisine = user_context.get("cuisine_style", "mixed")
         restrictions = user_context.get("dietary_restrictions", "none")
@@ -145,8 +164,9 @@ Return JSON:
   ]
 }}"""
 
+        active_client = client or self.client
         try:
-            result = self.client.generate_json(RECOMMENDATION_SYSTEM, user_prompt)
+            result = active_client.generate_json(RECOMMENDATION_SYSTEM, user_prompt)
             return NutrientRecommendationResponse(
                 deficiency_insights=[DeficiencyInsight(**d) for d in result.get("deficiency_insights", [])],
                 food_recommendations=[FoodRecommendation(**r) for r in result.get("food_recommendations", [])],
